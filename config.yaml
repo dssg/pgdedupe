@@ -1,0 +1,31 @@
+# Schema for Dedupe's tables:
+schema: dedupe
+# The source table to dedupe:
+table: dedupe.entries
+# The column in the source table that is the key
+key: entry_id
+# The fields to use as evidence of a duplicate row and their comparison operator:
+fields:
+    -   field: ssn
+        type: String
+        has missing: true
+    -   field: first_name
+        type: String
+    -   field: last_name
+        type: String
+    -   field: full_name
+        type: Person Name
+    -   field: dob
+        type: String
+    -   field: race
+        type: Categorical
+        categories: [pacisland, amindian, asian, other, black, white]
+    -   field: ethnicity
+        type: Categorical
+        categories: [hispanic, nonhispanic]
+    -   field: sex
+        type: Categorical
+        categories: [M, F]
+interactions:
+    - [last_name, dob]
+    - [ssn, dob]
