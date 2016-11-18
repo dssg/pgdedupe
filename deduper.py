@@ -69,7 +69,7 @@ all_columns = columns | set(['_unique_id'])
 print('creating unique entries table (this may take some time)...')
 c.execute("""DROP TABLE IF EXISTS dedupe.entries_unique""")
 c.execute("""CREATE TABLE dedupe.entries_unique AS (
-                SELECT min({0}) as _unique_id, {1} FROM {2}
+                SELECT min({0}) as _unique_id, {1}, array_agg({0}) as src_ids FROM {2}
                 WHERE last_name is not null AND
                     (ssn is not null
                     OR (first_name is not null AND dob is not null))
@@ -382,8 +382,9 @@ con.commit()
 # create a mapping between the unique entries and the original entries
 c.execute("DROP TABLE IF EXISTS dedupe.unique_map")
 c.execute("CREATE TABLE dedupe.unique_map AS ("
-          "SELECT e.dedupe_id, {} FROM dedupe.entries_unique e "
-          "LEFT JOIN {} USING({}))".format(config['key'], config['table'], ', '.join(columns)))
+          "SELECT dedupe_id, unnest(src_ids) as {}"
+          "FROM dedupe.entries_unique)".format(config['key']))
+          
 con.commit()
 
 c.execute("ALTER TABLE {} DROP COLUMN IF EXISTS dedupe_id".format(config['table']))
