@@ -27,7 +27,7 @@ def main():
                     help='Increase verbosity (specify multiple times for more)'
                     )
     argp.add_argument('-d', '--db', default='/home/mbauman/psql_profile.json',
-                    help='Path to JSON config file that contains host, database, user and password')
+                    help='Path to YAML config file that contains host, database, user and password')
     opts = argp.parse_args()
     log_level = logging.WARNING
     if opts.verbose == 1:
@@ -65,6 +65,9 @@ def process_config(c):
         config[k] = c[k]
     # Optional fields
     for k, default in (('interactions', []),
+                       ('threshold', 0.5),
+                       ('maximum_comparisons', 100000000000),
+                       ('recall', 0.90),
                        ('settings_file', 'dedup_postgres_settings'),
                        ('training_file', 'dedup_postgres_training.json')):
         config[k] = c.get(k, default)
@@ -144,7 +147,7 @@ def train(con, config):
     # `recall` is the proportion of true dupes pairs that the learned
     # rules must cover. You may want to reduce this if your are making
     # too many blocks and too many comparisons.
-    deduper.train(maximum_comparisons=100000000000, recall=0.90)
+    deduper.train(maximum_comparisons=config['maximum_comparisons'], recall=config['recall'])
 
     with open(config['settings_file'], 'wb') as sf:
         deduper.writeSettings(sf)
@@ -323,7 +326,7 @@ def cluster(deduper, con, config):
                "ORDER BY (block_id)".format(**config))
 
     print('clustering...')
-    return deduper.matchBlocks(candidates_gen(c4), threshold=0.5)
+    return deduper.matchBlocks(candidates_gen(c4), threshold=config['threshold'])
 
 ## Writing out results
 def write_results(clustered_dupes, con, config):
