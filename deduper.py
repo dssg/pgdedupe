@@ -18,6 +18,8 @@ import psycopg2.extras
 
 import dedupe
 
+import exact_matches
+
 START_TIME = time.time()
 
 def main():
@@ -47,6 +49,7 @@ def main():
     create_blocking(deduper, con, config)
     clustered_dupes = cluster(deduper, con, config)
     write_results(clustered_dupes, con, config)
+    apply_results(con, config)
     # Close our database connection
     con.close()
 
@@ -68,9 +71,14 @@ def process_config(c):
                        ('threshold', 0.5),
                        ('maximum_comparisons', 100000000000),
                        ('recall', 0.90),
+                       ('merge exact', [[]]),
                        ('settings_file', 'dedup_postgres_settings'),
                        ('training_file', 'dedup_postgres_training.json')):
         config[k] = c.get(k, default)
+    # Ensure that the merge exact list is a list of lists
+    if type(config['merge exact']) is not list: raise Exception('merge exact must be a list of columns')
+    if type(config['merge exact'][0]) is not list:
+        config['merge exact'] = [config['merge exact']]
     # Add variable names to the field definitions, defaulting to the field
     for d in config['fields']:
         if 'variable name' not in d:
@@ -369,10 +377,12 @@ def write_results(clustered_dupes, con, config):
     print(len(clustered_dupes))
 
 
-    # ## Payoff
-
-    # Now we can create a mapping between the canonical id and a unique integer
-    # TODO: We really only need to do this if _unique_id isn't already an integer
+# ## Payoff
+def apply_results(con, config):
+    c = con.cursor()
+    # Dedupe only cares about matched records; it doesn't have a canonical id
+    # for singleton records. So we create a mapping table between *all*
+    # _unique_ids to their canonical_id (or back to themselves if singletons).
     c.execute("DROP TABLE IF EXISTS {schema}.map".format(**config))
     c.execute("CREATE TABLE {schema}.map "
               "AS SELECT COALESCE(canon_id, _unique_id) AS canon_id,"
@@ -381,7 +391,15 @@ def write_results(clustered_dupes, con, config):
               "FROM {schema}.entity_map "
               "RIGHT JOIN {schema}.entries_unique USING(_unique_id)".format(**config))
 
+    # Merge clusters based upon exact matches of a subset of fields
+    for cols in config['merge exact']:
+        exact_matches.merge('{}.map'.format(config['schema']),
+                            '{}.entries_unique'.format(config['schema']),
+                            cols,
+                            con)
+
     # Convert the canon_id to an integer id
+    # TODO: We really only need to do this if _unique_id isn't already an integer
     c.execute("DROP TABLE IF EXISTS {schema}.clusters".format(**config))
     c.execute("CREATE TABLE {schema}.clusters AS "
               "(SELECT DISTINCT canon_id FROM {schema}.map)".format(**config))

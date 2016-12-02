@@ -29,3 +29,6 @@ fields:
 interactions:
     - [last_name, dob]
     - [ssn, dob]
+merge exact:
+    - [first_name, last_name, dob]
+    - [last_name, ssn]
