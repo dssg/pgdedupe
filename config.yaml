@@ -13,10 +13,11 @@ fields:
         type: String
     -   field: last_name
         type: String
-    -   field: full_name
-        type: Person Name
+    # -   field: full_name
+    #     type: Person Name
     -   field: dob
         type: String
+        # has missing: true
     -   field: race
         type: Categorical
         categories: [pacisland, amindian, asian, other, black, white]

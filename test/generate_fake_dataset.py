@@ -77,6 +77,7 @@ class Person(object):
         self.dob = dob
         self.race = race
         self.ethnicity = ethnicity
+        self.name_change_count = 0
         
     def write_row(self, csvfile):
         csvfile.writerow([
@@ -101,24 +102,27 @@ class Person(object):
         return typo(fname)
     
     def munged_lname(self):
-        if self.sex == Sex.female and random.random() < 0.05:
+        if self.sex == Sex.female and self.name_change_count < 2 and random.random() < 0.05:
             # Name change. TODO: this is really a rate per year, not per record
             self.lname = fake.last_name()
+            self.name_change_count = self.name_change_count + 1
         lname = self.lname
         if ' ' in self.lname:
             if random.random() < .4:
-                lname = random.choice(lname.split(' '))
-            elif random.random() < .02:
+                lname = lname.split(' ')[0]
+            elif random.random() < .2:
+                lname = lname.split(' ')[1]
+            elif random.random() < .1:
                 lname = lname.replace(' ', '-')
         return typo(lname)
     
     def munged_ssn(self):
-        if random.random() < .2: return None
-        if random.random() < .1:
+        if random.random() < .15: return None
+        if random.random() < .01:
             chars = list(self.ssn)
             for i, d in enumerate(chars):
                 if d == '-': continue
-                if random.random() < 1/7: # slightly worse than 1/9
+                if random.random() < 1/9:
                     chars[i] = str((int(d) + random.choice([-1,1])) % 10)
             return ''.join(chars)
         return self.ssn
@@ -131,12 +135,25 @@ class Person(object):
     def munged_dob(self):
         if random.random() < .05: return None
         dob = self.dob
-        if dob.day <= 12 and random.random() < 0.01:
-            # Swap day and month
-            dob = date(dob.year,dob.day,dob.month)
-        if random.random() < 0.15: # Birthday issues are pretty common
-            # TODO: this should be a little more realistic
-            dob = fake.date_time_between_dates(dob - timedelta(days=365), dob + timedelta(days=365)).date()
+        r = random.random()
+        if dob.day <= 12 and r < 0.01:
+            return date(dob.year,dob.day,dob.month)
+        if dob.month < 12 and r < 0.02:
+            return date(dob.year,dob.month+1,min(dob.day, 28))
+        if dob.month > 1 and r < 0.03:
+            return date(dob.year,dob.month-1,min(dob.day, 28))
+        if dob.day < 28 and r < 0.04:
+            return date(dob.year,dob.month,dob.day+1)
+        if dob.day > 1 and r < 0.05:
+            return date(dob.year,dob.month,dob.day-1)
+        if dob.day > 10 and r < 0.06:
+            return date(dob.year,dob.month,dob.day-10)
+        if dob.day < 19 and r < 0.07:
+            return date(dob.year,dob.month,dob.day+10)
+        if r < 0.09:
+            return date(dob.year + random.choice((-1,1)), dob.month, min(dob.day, 28))
+        if r < 0.15: # Birthday issues are pretty common
+            return dob + timedelta(days=random.normalvariate(0,365/2))
         return dob
     
     def munged_race(self):
@@ -186,12 +203,12 @@ def typo(s):
     chars = list(s)
     i = 0
     while i < len(chars):
-        if random.random() < .002:
+        if random.random() < .00033333:
             chars.insert(i, chars[i])
             i = i+1
-        if random.random() < .002 and 0 <= ord(chars[i].lower()) - ord('a') < 26:
+        if random.random() < .00033333 and 0 <= ord(chars[i].lower()) - ord('a') < 26:
             chars[i] = chr(((ord(chars[i].lower()) - ord('a') + random.choice(range(1,25))) % 26) + ord('a'))
-        if random.random() < .002:
+        if random.random() < .00033333:
             chars.pop(i)
             i = i-1
         i = i+1
@@ -213,5 +230,5 @@ def create_csv(pop, filename, mean=20):
                 p.write_row(csvwriter)
 
 if __name__ == '__main__':
-    population = create_population(10000)
+    population = create_population(25000)
     create_csv(population, 'people.csv')
