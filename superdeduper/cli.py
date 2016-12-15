@@ -16,33 +16,29 @@ import yaml
 import psycopg2 as psy
 import psycopg2.extras
 
+import click
 import dedupe
 
 import exact_matches
 
 START_TIME = time.time()
 
-def main():
-    argp = ArgumentParser()
-    argp.add_argument('config', nargs=1, help='Path to YAML file that specifies table and fields')
-    argp.add_argument('-v', '--verbose', action='count',
-                    help='Increase verbosity (specify multiple times for more)'
-                    )
-    argp.add_argument('-d', '--db', default='/home/mbauman/psql_profile.json',
-                    help='Path to YAML config file that contains host, database, user and password')
-    opts = argp.parse_args()
+@click.command()
+@click.option('--config', help='YAML-formatted configuration file.')
+@click.option('--db', help='YAML-formatted database connection credentials.')
+def main(config, db, verbosity=2):
     log_level = logging.WARNING
-    if opts.verbose == 1:
+    if verbosity == 1:
         log_level = logging.INFO
-    elif opts.verbose is None or opts.verbose >= 2:
+    elif verbosity is None or verbosity >= 2:
         log_level = logging.DEBUG
     logging.getLogger().setLevel(log_level)
 
-    with open(opts.db) as f:
+    with open(db) as f:
         dbconfig = yaml.load(f)
     con = psy.connect(cursor_factory=psycopg2.extras.RealDictCursor, **dbconfig)
 
-    config = load_config(opts.config[0])
+    config = load_config(config)
 
     preprocess(con, config)
     deduper = train(con, config)
