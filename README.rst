@@ -29,7 +29,7 @@ databases with custom pre-processing and post-processing steps.
 Interface
 ---------
 
-This provides a simple command-line script, ``deduper.py``. Two configuration
+This provides a simple command-line script, ``superdeduper.py``. Two configuration
 files specify the configuration parameters and database connection settings. To
 run deduplication on a generated dataset, create a ``database.yml`` file that
 specifies the following parameters::
