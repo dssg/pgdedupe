@@ -22,6 +22,7 @@ import dedupe
 import exact_matches
 
 START_TIME = time.time()
+DEDUPE_TEXT_TYPES = ('String', 'ShortString', 'Text', 'Address', 'Name')
 
 @click.command()
 @click.option('--config', help='YAML-formatted configuration file.')
@@ -82,27 +83,49 @@ def process_config(c):
                        ('settings_file', 'dedup_postgres_settings'),
                        ('training_file', 'dedup_postgres_training.json'),
                        ('filter_condition', '1=1'),
+                       ('regexp_replace', []),
                        ('num_cores', None)
                        ):
         config[k] = c.get(k, default)
     # Ensure that the merge_exact list is a list of lists
     if type(config['merge_exact']) is not list: raise Exception('merge_exact must be a list of columns')
+
     if len(config['merge_exact']) > 0 and type(config['merge_exact'][0]) is not list:
         config['merge_exact'] = [config['merge_exact']]
+
+    if type(config['regexp_replace']) is not list: raise Exception('merge_exact must be a list of lists')
+
     # Add variable names to the field definitions, defaulting to the field
     for d in config['fields']:
         if 'variable name' not in d:
             d['variable name'] = d['field']
+
     # Add some handy computed values for convenience
     config['all_fields'] = config['fields'] + [{'type': 'Interaction', 'interaction variables': x} for x in config['interactions']]
     columns = set([x['field'] for x in config['fields']])
-    config['columns'] = ', '.join(columns)
     config['all_columns'] = ', '.join(columns | set(['_unique_id']))
     return config
 
 def preprocess(con, config):
-    c = con.cursor()
+    columns = set(x['field'] for x in config['fields'])
 
+    select = []
+    if len(config['regexp_replace']) > 0:
+        text_columns = set([x['field'] for x in config['fields'] 
+                       if x['type'] in DEDUPE_TEXT_TYPES])
+        columns = columns.difference(text_columns)
+
+        replace_template = "regexp_replace({column}, {args}) AS {column}"
+        for c in text_columns:
+            select.append(replace_template.format(
+                          column=c, 
+                          args=str.join(', ', config['regexp_replace'])))
+
+    select += list(columns)
+    config['groupby'] = str.join(', ', map(str, range(1, len(select)+1)))
+    config['columns'] = str.join(', ', select)
+
+    c = con.cursor()
     # Do an initial first pass and merge all exact duplicates
     c.execute("""CREATE SCHEMA IF NOT EXISTS {schema}""".format(**config))
 
@@ -111,7 +134,7 @@ def preprocess(con, config):
     c.execute("""CREATE TABLE {schema}.entries_unique AS (
                     SELECT {columns}, array_agg({key}) as src_ids FROM {table}
                     WHERE ({filter_condition})
-                    GROUP BY {columns})""".format(**config))
+                    GROUP BY {groupby})""".format(**config))
     c.execute("ALTER TABLE {schema}.entries_unique ADD COLUMN _unique_id SERIAL PRIMARY KEY".format(**config))
     con.commit()
 
