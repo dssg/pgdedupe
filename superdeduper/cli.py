@@ -69,7 +69,9 @@ def process_config(c):
                        ('recall', 0.90),
                        ('merge exact', [[]]),
                        ('settings_file', 'dedup_postgres_settings'),
-                       ('training_file', 'dedup_postgres_training.json')):
+                       ('training_file', 'dedup_postgres_training.json'),
+                       ('filter_condition', '1=1')
+                       ):
         config[k] = c.get(k, default)
     # Ensure that the merge exact list is a list of lists
     if type(config['merge exact']) is not list: raise Exception('merge exact must be a list of columns')
@@ -97,9 +99,7 @@ def preprocess(con, config):
     c.execute("""DROP TABLE IF EXISTS {schema}.entries_unique""".format(**config))
     c.execute("""CREATE TABLE {schema}.entries_unique AS (
                     SELECT min({key}) as _unique_id, {columns}, array_agg({key}) as src_ids FROM {table}
-                    WHERE last_name is not null AND
-                        (ssn is not null
-                        OR (first_name is not null AND dob is not null))
+                    WHERE ({filter_condition})
                     GROUP BY {columns})""".format(**config))
     con.commit()
 
