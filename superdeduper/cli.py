@@ -98,9 +98,10 @@ def preprocess(con, config):
     print('creating unique entries table (this may take some time)...')
     c.execute("""DROP TABLE IF EXISTS {schema}.entries_unique""".format(**config))
     c.execute("""CREATE TABLE {schema}.entries_unique AS (
-                    SELECT min({key}) as _unique_id, {columns}, array_agg({key}) as src_ids FROM {table}
+                    SELECT {columns}, array_agg({key}) as src_ids FROM {table}
                     WHERE ({filter_condition})
                     GROUP BY {columns})""".format(**config))
+    c.execute("ALTER TABLE {schema}.entries_unique ADD COLUMN _unique_id SERIAL PRIMARY KEY".format(**config))
     con.commit()
 
 # ## Training
@@ -394,22 +395,10 @@ def apply_results(con, config):
                             cols,
                             con)
 
-    # Convert the canon_id to an integer id
-    # TODO: We really only need to do this if _unique_id isn't already an integer
-    c.execute("DROP TABLE IF EXISTS {schema}.clusters".format(**config))
-    c.execute("CREATE TABLE {schema}.clusters AS "
-              "(SELECT DISTINCT canon_id FROM {schema}.map)".format(**config))
-    c.execute("ALTER TABLE {schema}.clusters ADD COLUMN dedupe_id SERIAL UNIQUE".format(**config))
-
-    # Add that cluster id back into the mapping table
-    c.execute("ALTER TABLE {schema}.map ADD COLUMN dedupe_id INTEGER".format(**config))
-    c.execute("UPDATE {schema}.map dst SET dedupe_id = src.dedupe_id "
-              "FROM {schema}.clusters src WHERE dst.canon_id = src.canon_id".format(**config))
-
     # Add that integer id back to the unique_entries table
     c.execute("ALTER TABLE {schema}.entries_unique DROP COLUMN IF EXISTS dedupe_id".format(**config))
     c.execute("ALTER TABLE {schema}.entries_unique ADD COLUMN dedupe_id INTEGER".format(**config))
-    c.execute("UPDATE {schema}.entries_unique u SET dedupe_id = m.dedupe_id "
+    c.execute("UPDATE {schema}.entries_unique u SET dedupe_id = m.canon_id "
               "FROM {schema}.map m WHERE u._unique_id = m._unique_id".format(**config))
     con.commit()
 
