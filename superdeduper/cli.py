@@ -40,12 +40,24 @@ def main(config, db, verbosity=2):
 
     config = load_config(config)
 
+    logging.info("Preprocessing...")
     preprocess(con, config)
+
+    logging.info("Training...")
     deduper = train(con, config)
+
+    logging.info("Creating blocking table...")
     create_blocking(deduper, con, config)
+
+    logging.info("Clustering...")
     clustered_dupes = cluster(deduper, con, config)
+
+    logging.info("Writing results...")
     write_results(clustered_dupes, con, config)
+
+    logging.info("Applying results...")
     apply_results(con, config)
+
     # Close our database connection
     con.close()
 
@@ -95,7 +107,6 @@ def preprocess(con, config):
     c.execute("""CREATE SCHEMA IF NOT EXISTS {schema}""".format(**config))
 
     # TODO: Make the restriction configurable
-    print('creating unique entries table (this may take some time)...')
     c.execute("""DROP TABLE IF EXISTS {schema}.entries_unique""".format(**config))
     c.execute("""CREATE TABLE {schema}.entries_unique AS (
                     SELECT {columns}, array_agg({key}) as src_ids FROM {table}
@@ -164,7 +175,6 @@ def train(con, config):
 
 ## Blocking
 def create_blocking(deduper, con, config):
-    print('blocking...')
     c = con.cursor()
 
     # To run blocking on such a large set of data, we create a separate table
@@ -330,7 +340,6 @@ def cluster(deduper, con, config):
                "USING (_unique_id) "
                "ORDER BY (block_id)".format(**config))
 
-    print('clustering...')
     return deduper.matchBlocks(candidates_gen(c4), threshold=config['threshold'])
 
 ## Writing out results
@@ -341,7 +350,6 @@ def write_results(clustered_dupes, con, config):
     # table
     c.execute("DROP TABLE IF EXISTS {schema}.entity_map".format(**config))
 
-    print('creating {schema}.entity_map database'.format(**config))
     c.execute("CREATE TABLE {schema}.entity_map "
               "(_unique_id INT, canon_id INT, " #TODO: THESE INTS MUST BE DYNAMIC
               " cluster_score FLOAT, PRIMARY KEY(_unique_id))".format(**config))
