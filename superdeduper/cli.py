@@ -77,13 +77,12 @@ def process_config(c):
     # Optional fields
     for k, default in (('interactions', []),
                        ('threshold', 0.5),
-                       ('maximum_comparisons', 100000000000),
                        ('recall', 0.90),
                        ('merge_exact', []),
                        ('settings_file', 'dedup_postgres_settings'),
                        ('training_file', 'dedup_postgres_training.json'),
                        ('filter_condition', '1=1'),
-                       ('num_cores', 1)
+                       ('num_cores', None)
                        ):
         config[k] = c.get(k, default)
     # Ensure that the merge_exact list is a list of lists
@@ -123,7 +122,7 @@ def train(con, config):
         with open(config['settings_file'], 'rb') as sf:
             return dedupe.StaticDedupe(sf, num_cores=2)
     # Create a new deduper object and pass our data model to it.
-    deduper = dedupe.Dedupe(config['all_fields'])
+    deduper = dedupe.Dedupe(config['all_fields'], num_cores=config['num_cores'])
 
     # Named cursor runs server side with psycopg2
     cur = con.cursor('individual_select')
@@ -156,15 +155,10 @@ def train(con, config):
     with open(config['training_file'], 'w') as tf:
         deduper.writeTraining(tf)
 
-    # Notice our two arguments here
-    #
-    # `maximum_comparisons` limits the total number of comparisons that
-    # a blocking rule can produce.
-    #
     # `recall` is the proportion of true dupes pairs that the learned
     # rules must cover. You may want to reduce this if your are making
     # too many blocks and too many comparisons.
-    deduper.train(maximum_comparisons=config['maximum_comparisons'], recall=config['recall'])
+    deduper.train(recall=config['recall'])
 
     with open(config['settings_file'], 'wb') as sf:
         deduper.writeSettings(sf)
