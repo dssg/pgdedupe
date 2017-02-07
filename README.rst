@@ -61,7 +61,7 @@ Once complete, store this example dataset in a database with::
 Now you can deduplicate this dataset. This will run dedupe as well as the
 custom pre-processing and post-processing steps::
 
-	$ python deduper.py config.yml --db database.yml
+	$ python deduper.py --config config.yml --db database.yml
 
 
 Custom pre- and post-processing
