@@ -79,16 +79,17 @@ def process_config(c):
                        ('threshold', 0.5),
                        ('maximum_comparisons', 100000000000),
                        ('recall', 0.90),
-                       ('merge exact', []),
+                       ('merge_exact', []),
                        ('settings_file', 'dedup_postgres_settings'),
                        ('training_file', 'dedup_postgres_training.json'),
-                       ('filter_condition', '1=1')
+                       ('filter_condition', '1=1'),
+                       ('num_cores', 1)
                        ):
         config[k] = c.get(k, default)
-    # Ensure that the merge exact list is a list of lists
-    if type(config['merge exact']) is not list: raise Exception('merge exact must be a list of columns')
-    if len(config['merge exact']) > 0 and type(config['merge exact'][0]) is not list:
-        config['merge exact'] = [config['merge exact']]
+    # Ensure that the merge_exact list is a list of lists
+    if type(config['merge_exact']) is not list: raise Exception('merge_exact must be a list of columns')
+    if len(config['merge_exact']) > 0 and type(config['merge_exact'][0]) is not list:
+        config['merge_exact'] = [config['merge_exact']]
     # Add variable names to the field definitions, defaulting to the field
     for d in config['fields']:
         if 'variable name' not in d:
@@ -397,7 +398,7 @@ def apply_results(con, config):
               "RIGHT JOIN {schema}.entries_unique USING(_unique_id)".format(**config))
 
     # Merge clusters based upon exact matches of a subset of fields
-    for cols in config['merge exact']:
+    for cols in config['merge_exact']:
         exact_matches.merge('{}.map'.format(config['schema']),
                             '{}.entries_unique'.format(config['schema']),
                             cols,
