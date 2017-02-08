@@ -11,6 +11,7 @@ import logging
 import locale
 import json
 from argparse import ArgumentParser
+from itertools import chain
 
 import yaml
 import psycopg2 as psy
@@ -102,18 +103,23 @@ def process_config(c):
 
     # Add some handy computed values for convenience
     config['all_fields'] = config['fields'] + [{'type': 'Interaction', 'interaction variables': x} for x in config['interactions']]
-    columns = set([x['field'] for x in config['fields']])
+
+
+    # columns is the union of dedupe fields and merge_exact fields
+    dedupe_columns = set([x['field'] for x in config['fields']])
+    merge_columns = set(chain(*config['merge_exact']))
+    columns = dedupe_columns.union(merge_columns)
+
+    config['columns'] = columns
     config['all_columns'] = ', '.join(columns | set(['_unique_id']))
     return config
 
 def preprocess(con, config):
-    columns = set(x['field'] for x in config['fields'])
-
     select = []
     if len(config['regexp_replace']) > 0:
         text_columns = set([x['field'] for x in config['fields'] 
                        if x['type'] in DEDUPE_TEXT_TYPES])
-        columns = columns.difference(text_columns)
+        columns = config['columns'].difference(text_columns)
 
         replace_template = "regexp_replace({column}, {args}) AS {column}"
         for c in text_columns:
