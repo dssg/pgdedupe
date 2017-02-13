@@ -108,18 +108,20 @@ def process_config(c):
     # columns is the union of dedupe fields and merge_exact fields
     dedupe_columns = set([x['field'] for x in config['fields']])
     merge_columns = set(chain(*config['merge_exact']))
-    columns = dedupe_columns.union(merge_columns)
 
-    config['columns'] = columns
-    config['all_columns'] = ', '.join(columns | set(['_unique_id']))
+    config['dedupe_columns'] = dedupe_columns
+    config['merge_columns'] = merge_columns
+    config['all_columns'] = ', '.join(dedupe_columns | set(['_unique_id']))
     return config
 
 def preprocess(con, config):
     select = []
+    columns = config['dedupe_columns']
+
     if len(config['regexp_replace']) > 0:
         text_columns = set([x['field'] for x in config['fields'] 
                        if x['type'] in DEDUPE_TEXT_TYPES])
-        columns = config['columns'].difference(text_columns)
+        columns = columns.difference(text_columns)
 
         replace_template = "regexp_replace({column}, {args}) AS {column}"
         for c in text_columns:
@@ -187,6 +189,7 @@ def train(con, config):
     # `recall` is the proportion of true dupes pairs that the learned
     # rules must cover. You may want to reduce this if your are making
     # too many blocks and too many comparisons.
+    #deduper.train(recall=config['recall'], maximum_comparisons=100000000000)
     deduper.train(recall=config['recall'])
 
     with open(config['settings_file'], 'wb') as sf:
