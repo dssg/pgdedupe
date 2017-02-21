@@ -13,8 +13,6 @@ fields:
         type: String
     -   field: last_name
         type: String
-    # -   field: full_name
-    #     type: Person Name
     -   field: dob
         type: String
         # has missing: true
@@ -27,6 +25,7 @@ fields:
     -   field: sex
         type: Categorical
         categories: [M, F]
+filter_condition: last_name is not null AND (ssn is not null OR (first_name is not null AND dob is not null))
 interactions:
     - [last_name, dob]
     - [ssn, dob]
