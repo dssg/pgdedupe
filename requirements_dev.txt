@@ -1,3 +1,4 @@
+numpy
 pip==8.1.2
 bumpversion==0.5.3
 wheel==0.29.0
@@ -9,6 +10,5 @@ Sphinx==1.4.8
 cryptography==1.7
 PyYAML==3.11
 pytest==2.9.2
-numpy
 psycopg2
 dedupe
