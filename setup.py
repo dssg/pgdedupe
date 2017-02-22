@@ -10,7 +10,10 @@ with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
 requirements = [
-    'Click>=6.0',
+    'Click>=6.0',        
+    'numpy',
+    'pandas',
+    'dedupe',
     # TODO: put package requirements here
 ]
 
