@@ -214,7 +214,7 @@ def typo(s):
         i = i+1
     return ''.join(chars)
 
-def create_population(n=100, twin_rate=.05):
+def create_population(n=100, twin_rate=.025):
     pop = Person.rand(int(n * (1-twin_rate)))
     twins = np.random.choice(pop, n - len(pop))
     for t in tqdm(twins, 'adding twins'):
@@ -226,9 +226,9 @@ def create_csv(pop, filename, mean=20):
         csvwriter = csv.writer(fd)
         csvwriter.writerow(['uuid','first_name','last_name','ssn','sex','dob','race','ethnicity'])
         for p in tqdm(pop, desc='writing csv'):
-            for _ in range(int(random.expovariate(1/mean))):
+            for _ in range(int(random.expovariate(1/mean))+1):
                 p.write_row(csvwriter)
 
 if __name__ == '__main__':
-    population = create_population(25000)
+    population = create_population(20000)
     create_csv(population, 'people.csv')
