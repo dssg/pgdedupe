@@ -8,9 +8,6 @@ import csv
 import tempfile
 import time
 import logging
-import locale
-import json
-from argparse import ArgumentParser
 
 import yaml
 import psycopg2 as psy
@@ -22,6 +19,7 @@ import dedupe
 import exact_matches
 
 START_TIME = time.time()
+
 
 @click.command()
 @click.option('--config', help='YAML-formatted configuration file.')
@@ -63,9 +61,11 @@ def main(config, db, verbosity=2):
 
     print('ran in', time.time() - START_TIME, 'seconds')
 
+
 def load_config(filename):
     with open(filename) as f:
         return process_config(yaml.load(f))
+
 
 def process_config(c):
     config = dict()
@@ -86,7 +86,8 @@ def process_config(c):
                        ):
         config[k] = c.get(k, default)
     # Ensure that the merge_exact list is a list of lists
-    if type(config['merge_exact']) is not list: raise Exception('merge_exact must be a list of columns')
+    if type(config['merge_exact']) is not list:
+        raise Exception('merge_exact must be a list of columns')
     if len(config['merge_exact']) > 0 and type(config['merge_exact'][0]) is not list:
         config['merge_exact'] = [config['merge_exact']]
     # Add variable names to the field definitions, defaulting to the field
@@ -94,11 +95,13 @@ def process_config(c):
         if 'variable name' not in d:
             d['variable name'] = d['field']
     # Add some handy computed values for convenience
-    config['all_fields'] = config['fields'] + [{'type': 'Interaction', 'interaction variables': x} for x in config['interactions']]
+    config['all_fields'] = config['fields'] + [
+        {'type': 'Interaction', 'interaction variables': x} for x in config['interactions']]
     columns = set([x['field'] for x in config['fields']])
     config['columns'] = ', '.join(columns)
     config['all_columns'] = ', '.join(columns | set(['_unique_id']))
     return config
+
 
 def preprocess(con, config):
     c = con.cursor()
@@ -112,12 +115,14 @@ def preprocess(con, config):
                     SELECT {columns}, array_agg({key}) as src_ids FROM {table}
                     WHERE ({filter_condition})
                     GROUP BY {columns})""".format(**config))
-    c.execute("ALTER TABLE {schema}.entries_unique ADD COLUMN _unique_id SERIAL PRIMARY KEY".format(**config))
+    c.execute("ALTER TABLE {schema}.entries_unique "
+              " ADD COLUMN _unique_id SERIAL PRIMARY KEY".format(**config))
     con.commit()
 
-# ## Training
+
+# Training
 def train(con, config):
-    if False: # os.path.exists(settings_file):
+    if False:  # os.path.exists(settings_file):
         print('reading from ', config['settings_file'])
         with open(config['settings_file'], 'rb') as sf:
             return dedupe.StaticDedupe(sf, num_cores=2)
@@ -168,7 +173,8 @@ def train(con, config):
     deduper.cleanupTraining()
     return deduper
 
-## Blocking
+
+# Blocking
 def create_blocking(deduper, con, config):
     c = con.cursor()
 
@@ -177,8 +183,8 @@ def create_blocking(deduper, con, config):
     print('creating blocking_map database')
     c.execute("DROP TABLE IF EXISTS {schema}.blocking_map".format(**config))
     c.execute("CREATE TABLE {schema}.blocking_map "
-              "(block_key VARCHAR(200), _unique_id INT)".format(**config)) # TODO: THIS INT needs to be dependent upon the column type of entry_id
-
+              "(block_key VARCHAR(200), _unique_id INT)".format(**config))  # TODO: THIS INT...
+    # ... needs to be dependent upon the column type of entry_id
 
     # If dedupe learned a Index Predicate, we have to take a pass
     # through the data and create indices.
@@ -216,7 +222,6 @@ def create_blocking(deduper, con, config):
 
     con.commit()
 
-
     # Remove blocks that contain only one record, sort by block key and
     # donor, key and index blocking map.
     #
@@ -225,7 +230,8 @@ def create_blocking(deduper, con, config):
     print('prepare blocking table. this will probably take a while ...')
 
     logging.info("indexing block_key")
-    c.execute("CREATE INDEX blocking_map_key_idx ON {schema}.blocking_map (block_key)".format(**config))
+    c.execute("CREATE INDEX blocking_map_key_idx "
+              " ON {schema}.blocking_map (block_key)".format(**config))
 
     c.execute("DROP TABLE IF EXISTS {schema}.plural_key".format(**config))
     c.execute("DROP TABLE IF EXISTS {schema}.plural_block".format(**config))
@@ -245,7 +251,8 @@ def create_blocking(deduper, con, config):
               "GROUP BY block_key HAVING COUNT(*) > 1".format(**config))
 
     logging.info("creating {schema}.block_key index".format(**config))
-    c.execute("CREATE UNIQUE INDEX block_key_idx ON {schema}.plural_key (block_key)".format(**config))
+    c.execute("CREATE UNIQUE INDEX block_key_idx "
+              " ON {schema}.plural_key (block_key)".format(**config))
 
     logging.info("calculating {schema}.plural_block".format(**config))
     c.execute("CREATE TABLE {schema}.plural_block "
@@ -254,10 +261,10 @@ def create_blocking(deduper, con, config):
               " USING (block_key))".format(**config))
 
     logging.info("adding _unique_id index and sorting index")
-    c.execute("CREATE INDEX plural_block_id_idx ON {schema}.plural_block (_unique_id)".format(**config))
+    c.execute("CREATE INDEX plural_block_id_idx "
+              " ON {schema}.plural_block (_unique_id)".format(**config))
     c.execute("CREATE UNIQUE INDEX plural_block_block_id_id_uniq "
               " ON {schema}.plural_block (block_id, _unique_id)".format(**config))
-
 
     # To use Kolb, et.al's Redundant Free Comparison scheme, we need to
     # keep track of all the block_ids that are associated with a
@@ -295,8 +302,7 @@ def create_blocking(deduper, con, config):
     con.commit()
 
 
-## Clustering
-
+# Clustering
 def candidates_gen(result_set):
     lset = set
 
@@ -328,6 +334,7 @@ def candidates_gen(result_set):
     if records:
         yield records
 
+
 def cluster(deduper, con, config):
     c4 = con.cursor('c4')
     c4.execute("SELECT {all_columns}, block_id, smaller_ids FROM {schema}.smaller_coverage "
@@ -337,7 +344,8 @@ def cluster(deduper, con, config):
 
     return deduper.matchBlocks(candidates_gen(c4), threshold=config['threshold'])
 
-## Writing out results
+
+# Writing out results
 def write_results(clustered_dupes, con, config):
     c = con.cursor()
     # We now have a sequence of tuples of donor ids that dedupe believes
@@ -346,17 +354,16 @@ def write_results(clustered_dupes, con, config):
     c.execute("DROP TABLE IF EXISTS {schema}.entity_map".format(**config))
 
     c.execute("CREATE TABLE {schema}.entity_map "
-              "(_unique_id INT, canon_id INT, " #TODO: THESE INTS MUST BE DYNAMIC
+              "(_unique_id INT, canon_id INT, "  # TODO: THESE INTS MUST BE DYNAMIC
               " cluster_score FLOAT, PRIMARY KEY(_unique_id))".format(**config))
 
     csv_file = tempfile.NamedTemporaryFile(prefix='entity_map_', delete=False,
                                            mode='w')
     csv_writer = csv.writer(csv_file)
 
-
     for cluster, scores in clustered_dupes:
         cluster_id = cluster[0]
-        for donor_id, score in zip(cluster, scores) :
+        for donor_id, score in zip(cluster, scores):
             csv_writer.writerow([donor_id, cluster_id, score])
 
     csv_file.close()
@@ -399,7 +406,8 @@ def apply_results(con, config):
                             con)
 
     # Add that integer id back to the unique_entries table
-    c.execute("ALTER TABLE {schema}.entries_unique DROP COLUMN IF EXISTS dedupe_id".format(**config))
+    c.execute(
+        "ALTER TABLE {schema}.entries_unique DROP COLUMN IF EXISTS dedupe_id".format(**config))
     c.execute("ALTER TABLE {schema}.entries_unique ADD COLUMN dedupe_id INTEGER".format(**config))
     c.execute("UPDATE {schema}.entries_unique u SET dedupe_id = m.canon_id "
               "FROM {schema}.map m WHERE u._unique_id = m._unique_id".format(**config))
@@ -419,9 +427,9 @@ def apply_results(con, config):
     c.execute("UPDATE {table} u SET dedupe_id = m.dedupe_id "
               "FROM {schema}.unique_map m WHERE u.{key} = m.{key}".format(**config))
 
-
     con.commit()
     c.close()
+
 
 if __name__ == '__main__':
     main()
