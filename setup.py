@@ -14,7 +14,9 @@ requirements = [
     'psycopg2',
     'numpy',
     'pandas',
-    # TODO: add 'dedupe'!
+    'PyYAML',
+    'dedupe',
+    'dedupe-variable-name',
 ]
 
 test_requirements = [
@@ -24,7 +26,7 @@ test_requirements = [
 setup(
     name='superdeduper',
     version='0.1.0',
-    description="A simple interface to datamade/dedupe e to make probabilistic record linkage easy.",
+    description="A simple interface to datamade/dedupe to make probabilistic record linkage easy.",
     long_description=readme + '\n\n' + history,
     author="DSaPP Researchers",
     author_email='datascifellows@gmail.com',
