@@ -2,3 +2,6 @@ numpy
 pandas
 psycopg2
 dedupe
+dedupe-variable-name
+PyYAML
+click
