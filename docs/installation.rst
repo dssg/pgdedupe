@@ -12,9 +12,9 @@ To install SuperDeduper, run this command in your terminal:
 
 .. code-block:: console
 
-    $ pip install superdeduper
+    $ pip install numpy && pip install superdeduper
 
-This is the preferred method to install SuperDeduper, as it will always install the most recent stable release. 
+This is the preferred method to install SuperDeduper, as it will always install the most recent stable release. Note that numpy is currently a pre-requisite for the installation process itself.
 
 If you don't have `pip`_ installed, this `Python installation guide`_ can guide
 you through the process.
