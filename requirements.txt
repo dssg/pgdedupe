@@ -1,7 +1,7 @@
 numpy
 pandas
 psycopg2
-dedupe
+dedupe==1.6.5
 dedupe-variable-name
 PyYAML
 click

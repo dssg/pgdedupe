@@ -63,7 +63,7 @@ def main(config, db, verbosity=2):
 
 
 def load_config(filename):
-    _, ext = os.path.splitext(filename).lower()
+    ext = os.path.splitext(filename)[1].lower()
     with open(filename) as f:
         if ext == '.json':
             return json.load(f)
