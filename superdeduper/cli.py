@@ -9,6 +9,7 @@ import tempfile
 import time
 import logging
 
+import json
 import yaml
 import psycopg2 as psy
 import psycopg2.extras
@@ -22,8 +23,8 @@ START_TIME = time.time()
 
 
 @click.command()
-@click.option('--config', help='YAML-formatted configuration file.')
-@click.option('--db', help='YAML-formatted database connection credentials.')
+@click.option('--config', help='YAML- or JSON-formatted configuration file.')
+@click.option('--db', help='YAML- or JSON-formatted database connection credentials.')
 def main(config, db, verbosity=2):
     log_level = logging.WARNING
     if verbosity == 1:
@@ -32,11 +33,10 @@ def main(config, db, verbosity=2):
         log_level = logging.DEBUG
     logging.getLogger().setLevel(log_level)
 
-    with open(db) as f:
-        dbconfig = yaml.load(f)
+    dbconfig = load_config(db)
     con = psy.connect(cursor_factory=psycopg2.extras.RealDictCursor, **dbconfig)
 
-    config = load_config(config)
+    config = process_options(load_config(config))
 
     logging.info("Preprocessing...")
     preprocess(con, config)
@@ -63,11 +63,17 @@ def main(config, db, verbosity=2):
 
 
 def load_config(filename):
+    _, ext = os.path.splitext(filename).lower()
     with open(filename) as f:
-        return process_config(yaml.load(f))
+        if ext == '.json':
+            return json.load(f)
+        elif ext == '.yaml':
+            return yaml.load(f)
+        else:
+            raise Exception('unknown filetype %s' % ext)
 
 
-def process_config(c):
+def process_options(c):
     config = dict()
     # Required fields
     for k in ('schema', 'table', 'key', 'fields'):
