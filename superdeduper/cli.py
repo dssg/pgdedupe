@@ -88,7 +88,9 @@ def process_options(c):
                        ('settings_file', 'dedup_postgres_settings'),
                        ('training_file', 'dedup_postgres_training.json'),
                        ('filter_condition', '1=1'),
-                       ('num_cores', None)
+                       ('num_cores', None),
+                       ('use_saved_model', False),
+                       ('prompt_for_labels', True),
                        ):
         config[k] = c.get(k, default)
     # Ensure that the merge_exact list is a list of lists
@@ -128,10 +130,10 @@ def preprocess(con, config):
 
 # Training
 def train(con, config):
-    if False:  # os.path.exists(settings_file):
+    if config['use_saved_model']:
         print('reading from ', config['settings_file'])
         with open(config['settings_file'], 'rb') as sf:
-            return dedupe.StaticDedupe(sf, num_cores=2)
+            return dedupe.StaticDedupe(sf, num_cores=config['num_cores'])
     # Create a new deduper object and pass our data model to it.
     deduper = dedupe.Dedupe(config['all_fields'], num_cores=config['num_cores'])
 
@@ -153,18 +155,19 @@ def train(con, config):
         with open(config['training_file']) as tf:
             deduper.readTraining(tf)
 
-    # ## Active learning
-    print('starting active labeling...')
-    # Starts the training loop. Dedupe will find the next pair of records
-    # it is least certain about and ask you to label them as duplicates
-    # or not.
+    if config['prompt_for_labels']:
+        # ## Active learning
+        print('starting active labeling...')
+        # Starts the training loop. Dedupe will find the next pair of records
+        # it is least certain about and ask you to label them as duplicates
+        # or not.
 
-    # use 'y', 'n' and 'u' keys to flag duplicates
-    # press 'f' when you are finished
-    dedupe.convenience.consoleLabel(deduper)
-    # When finished, save our labeled, training pairs to disk
-    with open(config['training_file'], 'w') as tf:
-        deduper.writeTraining(tf)
+        # use 'y', 'n' and 'u' keys to flag duplicates
+        # press 'f' when you are finished
+        dedupe.convenience.consoleLabel(deduper)
+        # When finished, save our labeled, training pairs to disk
+        with open(config['training_file'], 'w') as tf:
+            deduper.writeTraining(tf)
 
     # `recall` is the proportion of true dupes pairs that the learned
     # rules must cover. You may want to reduce this if your are making
