@@ -36,3 +36,5 @@ merge_exact:
     - [last_name, ssn]
 # Turn off interactive labelling; this requires a saved training set
 prompt_for_labels: False
+# Specify the location of the saved training dataset
+training_file: tests/dedup_postgres_training.json
