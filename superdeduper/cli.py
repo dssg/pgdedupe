@@ -404,12 +404,16 @@ def apply_results(con, config):
               "FROM {schema}.entity_map "
               "RIGHT JOIN {schema}.entries_unique USING(_unique_id)".format(**config))
 
-    # Merge clusters based upon exact matches of a subset of fields
+    # Merge clusters based upon exact matches of a subset of fields. This can
+    # be done on the unique table or on the actual entries table, but it's more
+    # efficient to do it now.
+    available_fields = [f['field'] for f in config['fields']]
     for cols in config['merge_exact']:
-        exact_matches.merge('{}.map'.format(config['schema']),
-                            '{}.entries_unique'.format(config['schema']),
-                            cols,
-                            con)
+        if not all(c in available_fields for c in cols):
+            continue
+        exact_matches.merge('{}.map'.format(config['schema']), 'canon_id',
+                            '{}.entries_unique'.format(config['schema']), '_unique_id',
+                            cols, config['schema'], con)
 
     # Add that integer id back to the unique_entries table
     c.execute(
@@ -426,6 +430,13 @@ def apply_results(con, config):
               "SELECT dedupe_id, unnest(src_ids) as {key} "
               "FROM {schema}.entries_unique)".format(**config))
 
+    # Grab the remainder of the exact merges:
+    for cols in config['merge_exact']:
+        if all(c in available_fields for c in cols):
+            continue
+        exact_matches.merge('{}.map'.format(config['schema']), 'dedupe_id',
+                            '{}.entries_unique'.format(config['schema']), 'entry_id',
+                            cols, config['schema'], con)
     con.commit()
 
     c.execute("ALTER TABLE {table} DROP COLUMN IF EXISTS dedupe_id".format(**config))
