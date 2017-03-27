@@ -1,5 +1,5 @@
 # Very rudimentary integration testing
-import tests.generate_fake_dataset
+import tests.generate_fake_dataset as gen
 
 import os
 import json
@@ -11,8 +11,8 @@ def test_integration():
     con = psy.connect(**psql.dsn())
     c = con.cursor()
 
-    pop = generate_fake_dataset.create_population(2000)
-    generate_fake_dataset.create_csv(pop, 'pop.csv')
+    pop = gen.create_population(2000)
+    gen.create_csv(pop, 'pop.csv')
 
     c.execute("""
          CREATE TABLE entries (
