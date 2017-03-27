@@ -1,4 +1,6 @@
 # Very rudimentary integration testing
+from superdeduper import cli
+from click.testing import CliRunner
 import tests.generate_fake_dataset as gen
 
 import os
@@ -36,9 +38,10 @@ def test_integration():
 
     with open('db.json','w') as f:
         json.dump(psql.dsn(), f)
-
-    err = os.system("superdeduper --config config.yaml --db db.json")
-    assert(err==0)
+    
+    runner = CliRunner()
+    result = runner.invoke(cli.main, ['--config', 'config.yaml', '--db', 'db.json'])
+    assert result.exit_code == 0
 
     c.execute("SELECT count(distinct dedupe_id) FROM entries")
     assert(c.fetchone()[0] < 4000) # Rudimentary quality check
