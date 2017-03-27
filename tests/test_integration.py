@@ -1,5 +1,5 @@
 # Very rudimentary integration testing
-import generate_fake_dataset
+import tests.generate_fake_dataset
 
 import os
 import json
