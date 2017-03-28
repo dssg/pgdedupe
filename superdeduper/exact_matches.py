@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import tempfile
 
 import pandas as pd
