@@ -17,7 +17,7 @@ install: pip install -U tox
 
 script: tox -e ${TOXENV}
 
-after_success: codecov 
+after_success: pip install codecov && codecov
 
 deploy:
   true:
