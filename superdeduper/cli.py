@@ -437,8 +437,8 @@ def apply_results(con, config):
     for cols in config['merge_exact']:
         if all(c in available_fields for c in cols):
             continue
-        exact_matches.merge('{}.map'.format(config['schema']), 'dedupe_id',
-                            '{}.entries_unique'.format(config['schema']), 'entry_id',
+        exact_matches.merge('{}.unique_map'.format(config['schema']), 'dedupe_id',
+                            config['table'], config['key'],
                             cols, config['schema'], con)
     con.commit()
 

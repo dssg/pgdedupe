@@ -97,5 +97,5 @@ def merge(mapping_table, mapping_id,
     c.execute("""UPDATE {m} m SET
                      {id} = t.id1
                  FROM {t} t
-                 WHERE m.canon_id = t.id2""".format(m=mapping_table, id=mapping_id, t=t))
+                 WHERE m.{id} = t.id2""".format(m=mapping_table, id=mapping_id, t=t))
     con.commit()
