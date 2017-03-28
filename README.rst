@@ -9,6 +9,9 @@ SuperDeduper
 .. image:: https://img.shields.io/travis/dssg/superdeduper.svg
         :target: https://travis-ci.org/dssg/superdeduper
 
+.. image:: https://codecov.io/gh/dssg/superdeduper/branch/master/graph/badge.svg
+	    :target: https://codecov.io/gh/dssg/superdeduper
+
 .. image:: https://readthedocs.org/projects/superdeduper/badge/?version=latest
         :target: https://superdeduper.readthedocs.io/en/latest/?badge=latest
         :alt: Documentation Status
