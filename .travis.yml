@@ -17,6 +17,8 @@ install: pip install -U tox
 
 script: tox -e ${TOXENV}
 
+after_success: codecov 
+
 deploy:
   true:
     condition: $TOXENV == py27
