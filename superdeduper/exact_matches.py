@@ -85,7 +85,7 @@ def merge(mapping_table, mapping_id,
     components = components_dict_to_df(get_components(edges))
 
     c = con.cursor()
-    with tempfile.TemporaryFile() as f:
+    with tempfile.TemporaryFile(mode='w') as f:
         components.to_csv(f, index=False, header=False)
         t = schema + ".merged_" + "_".join(exact_columns)
         c.execute("DROP TABLE IF EXISTS {}".format(t))

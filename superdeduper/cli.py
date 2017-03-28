@@ -17,7 +17,7 @@ import psycopg2.extras
 import click
 import dedupe
 
-import exact_matches
+from . import exact_matches
 
 START_TIME = time.time()
 
