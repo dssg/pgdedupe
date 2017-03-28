@@ -17,3 +17,4 @@ testing.postgresql
 Faker
 tqdm
 codecov
+pytest-cov
