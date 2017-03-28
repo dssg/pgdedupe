@@ -1,5 +1,6 @@
 from __future__ import division
 
+from os import path
 import uuid
 import random
 import csv
@@ -14,7 +15,7 @@ from faker import Faker
 from tqdm import tqdm
 
 fake = Faker()
-nicknames = pd.read_csv('nicknames.csv', skipinitialspace=True)
+nicknames = pd.read_csv(path.join(path.dirname(path.abspath(__file__)), 'nicknames.csv'), skipinitialspace=True)
 
 class CategoricalDistribution(Enum):
     def __new__(cls, prob):

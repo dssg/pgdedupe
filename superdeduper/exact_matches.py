@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import tempfile
 
 import pandas as pd
@@ -48,33 +50,52 @@ def components_dict_to_df(components):
     return deduped
 
 
-def merge(mapping_table, entries_table, exact_columns, con):
+def merge(mapping_table, mapping_id,
+          entries_table, entry_id,
+          exact_columns, schema, con):
+    """
+    Given a mapping table that identifies clusters of entries in an entry table
+    that are linked together, use a subset of columns to perform exact record-
+    linkage in order to join together matched clusters.
+
+    Arguments:
+        mapping_table: a SQL table that contains two columns, linking each entry_id to a mapping_id
+        mapping_id: the column name for the clusters of joined entries
+        entries_table: a SQL table that contains the entry_id and columns
+        entry_id: the column name for the primary key of the entries_table
+        exact_columns: a list of column names over which the exact merge should be performed
+        schema: the schema where a temporary table may be created
+        con: a connection to the database
+    """
     edges = pd.read_sql("""
     with subset as (
-        SELECT _unique_id, canon_id, {cols}
-        FROM {entries} LEFT JOIN {mapping} using (_unique_id)
+        SELECT {key}, {cluster}, {cols}
+        FROM {entries} LEFT JOIN {mapping} using ({key})
     )
 
-    SELECT t1.canon_id id1, id2 from
+    SELECT t1.{cluster} id1, id2 from
     subset t1 JOIN
-    (SELECT min(canon_id) id2, {cols} from subset group by {cols} having count(*) > 1) t
+    (SELECT min({cluster}) id2, {cols} from subset group by {cols} having count(*) > 1) t
     using ({cols})
-    where t1.canon_id > id2
+    where t1.{cluster} > id2
     group by 1,2
-    """.format(cols=', '.join(exact_columns), entries=entries_table, mapping=mapping_table), con)
+    """.format(cols=', '.join(exact_columns), entries=entries_table,
+               mapping=mapping_table, key=entry_id, cluster=mapping_id), con)
 
     components = components_dict_to_df(get_components(edges))
 
     c = con.cursor()
-    with tempfile.TemporaryFile() as f:
+    with tempfile.TemporaryFile(mode='w+t') as f:
         components.to_csv(f, index=False, header=False)
-        t = "merged_" + "_".join(exact_columns)
-        c.execute("DROP TABLE IF EXISTS dedupe.{}".format(t))  # TODO SCHEMA NAME
-        c.execute("CREATE TABLE dedupe.{} (id1 INT, id2 INT)".format(t))  # TODO DATA TYPE
+        t = schema + ".merged_" + "_".join(exact_columns)
+        c.execute("DROP TABLE IF EXISTS {}".format(t))
+        c.execute("""CREATE TABLE {t} AS
+                     (SELECT {id} as id1, {id} as id2 FROM {m} LIMIT 0)
+                  """.format(t=t, id=mapping_id, m=mapping_table))
         f.seek(0)
-        c.copy_from(f, 'dedupe.' + t, sep=',')
+        c.copy_from(f, t, sep=',')
     c.execute("""UPDATE {m} m SET
-                     canon_id = t.id1
-                 FROM dedupe.{t} t
-                 WHERE m.canon_id = t.id2""".format(m=mapping_table, t=t))
+                     {id} = t.id1
+                 FROM {t} t
+                 WHERE m.canon_id = t.id2""".format(m=mapping_table, id=mapping_id, t=t))
     con.commit()
