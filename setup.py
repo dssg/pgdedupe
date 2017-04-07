@@ -15,7 +15,7 @@ requirements = [
     'numpy',
     'pandas',
     'PyYAML',
-    'dedupe',
+    'dedupe>=1.6.0',
     'dedupe-variable-name',
 ]
 
