@@ -1,4 +1,4 @@
-numpy
+numpy==1.12.1
 pandas
 pip==8.1.2
 bumpversion==0.5.3
