@@ -135,7 +135,7 @@ def preprocess(con, config):
 # Training
 def train(con, config):
     if config['seed'] is not None:
-        if os.environ.get('PYTHONHASHSEED','random') == 'random':
+        if os.environ.get('PYTHONHASHSEED', 'random') == 'random':
             logging.warn("""dedupe is only deterministic with hash randomization disabled.
                             Set the PYTHONHASHSEED environment variable to a constant.""")
         random.seed(config['seed'])
@@ -150,11 +150,13 @@ def train(con, config):
     # Named cursor runs server side with psycopg2
     cur = con.cursor('individual_select')
 
-    cur.execute("SELECT {all_columns} FROM {schema}.entries_unique order by _unique_id".format(**config))
+    cur.execute("""SELECT {all_columns}
+                   FROM {schema}.entries_unique
+                   ORDER BY _unique_id""".format(**config))
     temp_d = dict((i, row) for i, row in enumerate(cur))
 
     deduper.sample(temp_d, 75000)
-    
+
     del temp_d
     # If we have training data saved from a previous run of dedupe,
     # look for it an load it in.
