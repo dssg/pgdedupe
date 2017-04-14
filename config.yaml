@@ -1,7 +1,7 @@
 # Schema for Dedupe's tables:
 schema: dedupe
 # The source table to dedupe:
-table: dedupe.entries
+table: entries
 # The column in the source table that is the key
 key: entry_id
 # The fields to use as evidence of a duplicate row and their comparison operator:
