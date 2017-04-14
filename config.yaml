@@ -30,11 +30,21 @@ interactions:
     - [ssn, dob]
 # This filter allows you to specify a bare minimum set of required columns
 filter_condition: last_name is not null AND (ssn is not null OR (first_name is not null AND dob is not null))
-# And after dedupe, we can do an exact record linkage merge of the found clusters
+# And after dedupe, an exact record linkage step using a subset of columns can
+# merge the found clusters
 merge_exact:
     - [first_name, last_name, dob]
     - [last_name, ssn]
-# Turn off interactive labelling; this requires a saved training set
+# Turn off interactive labeling; this requires a saved training set
 prompt_for_labels: False
+# You can manually tune the desired recall for the training labels. This
+# establishes a blocking pattern such that at least `recall` fraction of the
+# true labeled matches get blocked together.
+recall: 0.99
 # Specify the location of the saved training dataset
 training_file: tests/dedup_postgres_training.json
+# You may optionally specify a seed for deterministic deduplicaiton. Note that
+# in Python 3.2.3 and higher, Dedupe also requires the PYTHONHASHSEED
+# environment variable to be set to an integer for its results to be
+# deterministic due to ordering dependencies.
+seed: 0

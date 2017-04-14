@@ -9,6 +9,9 @@ import tempfile
 import time
 import logging
 
+import random
+import numpy
+
 import json
 import yaml
 import psycopg2 as psy
@@ -67,7 +70,7 @@ def load_config(filename):
     with open(filename) as f:
         if ext == '.json':
             return json.load(f)
-        elif ext == '.yaml':
+        elif ext in ('.yaml', '.yml'):
             return yaml.load(f)
         else:
             raise Exception('unknown filetype %s' % ext)
@@ -91,6 +94,7 @@ def process_options(c):
                        ('num_cores', None),
                        ('use_saved_model', False),
                        ('prompt_for_labels', True),
+                       ('seed', None)
                        ):
         config[k] = c.get(k, default)
     # Ensure that the merge_exact list is a list of lists
@@ -130,6 +134,12 @@ def preprocess(con, config):
 
 # Training
 def train(con, config):
+    if config['seed'] is not None:
+        if os.environ.get('PYTHONHASHSEED', 'random') == 'random':
+            logging.warn("""dedupe is only deterministic with hash randomization disabled.
+                            Set the PYTHONHASHSEED environment variable to a constant.""")
+        random.seed(config['seed'])
+        numpy.random.seed(config['seed'])
     if config['use_saved_model']:
         print('reading from ', config['settings_file'])
         with open(config['settings_file'], 'rb') as sf:
@@ -140,10 +150,13 @@ def train(con, config):
     # Named cursor runs server side with psycopg2
     cur = con.cursor('individual_select')
 
-    cur.execute("SELECT {all_columns} FROM {schema}.entries_unique".format(**config))
+    cur.execute("""SELECT {all_columns}
+                   FROM {schema}.entries_unique
+                   ORDER BY _unique_id""".format(**config))
     temp_d = dict((i, row) for i, row in enumerate(cur))
 
     deduper.sample(temp_d, 75000)
+
     del temp_d
     # If we have training data saved from a previous run of dedupe,
     # look for it an load it in.
