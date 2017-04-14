@@ -70,7 +70,7 @@ def load_config(filename):
     with open(filename) as f:
         if ext == '.json':
             return json.load(f)
-        elif ext == '.yaml':
+        elif ext in ('.yaml', '.yml'):
             return yaml.load(f)
         else:
             raise Exception('unknown filetype %s' % ext)
