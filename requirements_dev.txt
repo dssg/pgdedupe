@@ -12,7 +12,7 @@ cryptography==1.8.1
 PyYAML==3.12
 pytest==3.0.7
 psycopg2==2.7.1
-dedupe
+dedupe==1.6.7
 testing.postgresql
 Faker
 tqdm
