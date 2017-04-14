@@ -1,5 +1,5 @@
 numpy==1.12.1
-pandas
+pandas==0.19.2
 psycopg2
 dedupe==1.6.5
 dedupe-variable-name
