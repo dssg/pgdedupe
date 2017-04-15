@@ -1,7 +1,7 @@
-numpy
-pandas
-psycopg2
-dedupe==1.6.5
-dedupe-variable-name
-PyYAML
-click
+numpy==1.12.1
+pandas==0.19.2
+psycopg2==2.7.1
+dedupe==1.6.7
+dedupe-variable-name==0.0.11
+PyYAML==3.12
+click==6.7
