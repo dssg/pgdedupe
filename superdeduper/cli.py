@@ -420,6 +420,9 @@ def apply_results(con, config):
               "FROM {schema}.entity_map "
               "RIGHT JOIN {schema}.entries_unique USING(_unique_id)".format(**config))
 
+    # Remove the dedupe_id column from entries if it already exists
+    c.execute("ALTER TABLE {table} DROP COLUMN IF EXISTS dedupe_id".format(**config))
+
     # Merge clusters based upon exact matches of a subset of fields. This can
     # be done on the unique table or on the actual entries table, but it's more
     # efficient to do it now.
@@ -432,8 +435,8 @@ def apply_results(con, config):
                             cols, config['schema'], con)
 
     # Add that integer id back to the unique_entries table
-    c.execute(
-        "ALTER TABLE {schema}.entries_unique DROP COLUMN IF EXISTS dedupe_id".format(**config))
+    c.execute("""ALTER TABLE {schema}.entries_unique
+                 DROP COLUMN IF EXISTS dedupe_id""".format(**config))
     c.execute("ALTER TABLE {schema}.entries_unique ADD COLUMN dedupe_id INTEGER".format(**config))
     c.execute("UPDATE {schema}.entries_unique u SET dedupe_id = m.canon_id "
               "FROM {schema}.map m WHERE u._unique_id = m._unique_id".format(**config))
@@ -455,7 +458,6 @@ def apply_results(con, config):
                             cols, config['schema'], con)
     con.commit()
 
-    c.execute("ALTER TABLE {table} DROP COLUMN IF EXISTS dedupe_id".format(**config))
     c.execute("ALTER TABLE {table} ADD COLUMN dedupe_id INTEGER".format(**config))
     c.execute("UPDATE {table} u SET dedupe_id = m.dedupe_id "
               "FROM {schema}.unique_map m WHERE u.{key} = m.{key}".format(**config))
