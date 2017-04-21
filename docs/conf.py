@@ -55,7 +55,8 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'pgdedupepyright = u"2016, DSaPP Researchers"
+project = u'pgdedupe'
+copyright = u"2016, DSaPP Researchers"
 
 # The version info for the project you're documenting, acts as replacement
 # for |version| and |release|, also used in various other places throughout
