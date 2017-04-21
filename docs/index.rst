@@ -1,4 +1,4 @@
-Welcome to SuperDeduper's documentation!
+Welcome to pgdedupe's documentation!
 ======================================
 
 Contents:

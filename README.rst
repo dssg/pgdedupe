@@ -1,23 +1,22 @@
 ===============================
-SuperDeduper
-===============================
+pgdedupe============================
 
 
-.. image:: https://img.shields.io/pypi/v/superdeduper.svg
-        :target: https://pypi.python.org/pypi/superdeduper
+.. image:: https://img.shields.io/pypi/v/pgdedupe.svg
+        :target: https://pypi.python.org/pypi/pgdedupe
 
-.. image:: https://img.shields.io/travis/dssg/superdeduper.svg
-        :target: https://travis-ci.org/dssg/superdeduper
+.. image:: https://img.shields.io/travis/dssg/pgdedupe.svg
+        :target: https://travis-ci.org/dssg/pgdedupe
 
-.. image:: https://codecov.io/gh/dssg/superdeduper/branch/master/graph/badge.svg
-	    :target: https://codecov.io/gh/dssg/superdeduper
+.. image:: https://codecov.io/gh/dssg/pgdedupe/branch/master/graph/badge.svg
+	    :target: https://codecov.io/gh/dssg/pgdedupe
 
-.. image:: https://readthedocs.org/projects/superdeduper/badge/?version=latest
-        :target: https://superdeduper.readthedocs.io/en/latest/?badge=latest
+.. image:: https://readthedocs.org/projects/pgdedupe/badge/?version=latest
+        :target: https://pgdedupe.readthedocs.io/en/latest/?badge=latest
         :alt: Documentation Status
 
-.. image:: https://pyup.io/repos/github/dssg/superdeduper/shield.svg
-     :target: https://pyup.io/repos/github/dssg/superdeduper/
+.. image:: https://pyup.io/repos/github/dssg/pgdedupe/shield.svg
+     :target: https://pyup.io/repos/github/dssg/pgdedupe/
      :alt: Updates
 
 
@@ -26,13 +25,13 @@ databases with custom pre-processing and post-processing steps.
 
 
 * Free software: MIT license
-* Documentation: https://superdeduper.readthedocs.io.
+* Documentation: https://pgdedupe.readthedocs.io.
 
 
 Interface
 ---------
 
-This provides a simple command-line program, ``superdeduper``. Two configuration
+This provides a simple command-line program, ``pgdedupe``. Two configuration
 files specify the deduplication parameters and database connection settings. To
 run deduplication on a generated dataset, create a ``database.yml`` file that
 specifies the following parameters::
@@ -64,7 +63,7 @@ Once complete, store this example dataset in a database with::
 Now you can deduplicate this dataset. This will run dedupe as well as the
 custom pre-processing and post-processing steps as defined in config.yml::
 
-	$ superdeduper --config config.yml --db database.yml
+	$ pgdedupe --config config.yml --db database.yml
 
 
 Custom pre- and post-processing

@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 """
-test_superdeduper
+test_pgdedupe
 ----------------------------------
 
-Tests for `superdeduper` module.
+Tests for `pgdedupe` module.
 """
 
 import pytest
@@ -13,8 +13,8 @@ import pytest
 from contextlib import contextmanager
 from click.testing import CliRunner
 
-from superdeduper import superdeduper
-from superdeduper import cli
+from pgdedupe import pgdedupe
+from pgdedupe import cli
 
 
 @pytest.fixture
@@ -35,7 +35,7 @@ def test_command_line_interface():
     runner = CliRunner()
     # result = runner.invoke(cli.main)
     # assert result.exit_code == 0
-    # assert 'superdeduper.cli.main' in result.output
+    # assert 'pgdedupe.cli.main' in result.output
     help_result = runner.invoke(cli.main, ['--help'])
     assert help_result.exit_code == 0
     assert '--help' in help_result.output

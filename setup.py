@@ -24,28 +24,28 @@ test_requirements = [
 ]
 
 setup(
-    name='superdeduper',
+    name='pgdedupe',
     version='0.1.7',
     description="A simple interface to datamade/dedupe to make probabilistic record linkage easy.",
     long_description=readme + '\n\n' + history,
     author="DSaPP Researchers",
     author_email='datascifellows@gmail.com',
-    url='https://github.com/dssg/superdeduper',
+    url='https://github.com/dssg/pgdedupe',
     packages=[
-        'superdeduper',
+        'pgdedupe',
     ],
-    package_dir={'superdeduper':
-                 'superdeduper'},
+    package_dir={'pgdedupe':
+                 'pgdedupe'},
     entry_points={
         'console_scripts': [
-            'superdeduper=superdeduper.cli:main'
+            'pgdedupe=pgdedupe.cli:main'
         ]
     },
     include_package_data=True,
     install_requires=requirements,
     license="MIT license",
     zip_safe=False,
-    keywords='superdeduper',
+    keywords='pgdedupe',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Developers',

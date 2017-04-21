@@ -1,5 +1,5 @@
 # Very rudimentary integration testing
-from superdeduper import cli
+from pgdedupe import cli
 from click.testing import CliRunner
 import tests.generate_fake_dataset as gen
 
