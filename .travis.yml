@@ -22,7 +22,7 @@ after_success: pip install codecov && codecov
 deploy:
   true:
     condition: $TOXENV == py27
-    repo: dssg/superdeduper
+    repo: dssg/pgdedupe
     tags: true
   distributions: sdist bdist_wheel
   password:
