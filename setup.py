@@ -25,7 +25,7 @@ test_requirements = [
 
 setup(
     name='pgdedupe',
-    version='0.1.7',
+    version='0.2.0',
     description="A simple interface to datamade/dedupe to make probabilistic record linkage easy.",
     long_description=readme + '\n\n' + history,
     author="DSaPP Researchers",
