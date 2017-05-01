@@ -290,16 +290,12 @@ def create_blocking(deduper, con, config):
 
     # To use Kolb, et.al's Redundant Free Comparison scheme, we need to
     # keep track of all the block_ids that are associated with a
-    # particular donor records. We'll use PostgreSQL's string_agg function to
-    # do this. This function will truncate very long lists of associated
-    # ids, so we'll also increase the maximum string length to try to
-    # avoid this
-    # c.execute("SET group_concat_max_len = 4096")
+    # particular donor records.
 
     logging.info("creating {schema}.covered_blocks".format(**config))
     c.execute("CREATE TABLE {schema}.covered_blocks "
               " AS (SELECT _unique_id, "
-              " string_agg(CAST(block_id AS TEXT), ',' ORDER BY block_id) "
+              " array_agg(block_id ORDER BY block_id)  "
               "   AS sorted_ids "
               " FROM {schema}.plural_block "
               " GROUP BY _unique_id)".format(**config))
@@ -311,12 +307,11 @@ def create_blocking(deduper, con, config):
 
     # In particular, for every block of records, we need to keep
     # track of a donor records's associated block_ids that are SMALLER than
-    # the current block's _unique_id. Because we ordered the ids when we did the
-    # GROUP_CONCAT we can achieve this by using some string hacks.
+    # the current block's _unique_id.
     logging.info("creating {schema}.smaller_coverage".format(**config))
     c.execute("CREATE TABLE {schema}.smaller_coverage "
               " AS (SELECT _unique_id, block_id, "
-              " TRIM(',' FROM split_part(sorted_ids, CAST(block_id AS TEXT), 1)) "
+              " sorted_ids[:(idx(sorted_ids, block_id) - 1)] "
               "      AS smaller_ids "
               " FROM {schema}.plural_block INNER JOIN {schema}.covered_blocks "
               " USING (_unique_id))".format(**config))
@@ -347,7 +342,7 @@ def candidates_gen(result_set):
         smaller_ids = row['smaller_ids']
 
         if smaller_ids:
-            smaller_ids = lset(smaller_ids.split(','))
+            smaller_ids = lset(smaller_ids)
         else:
             smaller_ids = lset([])
 
