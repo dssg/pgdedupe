@@ -118,10 +118,21 @@ def process_options(c):
 def preprocess(con, config):
     c = con.cursor()
 
-    # Do an initial first pass and merge all exact duplicates
+    # Ensure the database has the schema and required functions
     c.execute("""CREATE SCHEMA IF NOT EXISTS {schema}""".format(**config))
 
-    # TODO: Make the restriction configurable
+    # Create an intarray-like idx function (https://wiki.postgresql.org/wiki/Array_Index):
+    c.execute("""CREATE OR REPLACE FUNCTION {schema}.idx(anyarray, anyelement)
+                   RETURNS INT AS
+                 $$
+                   SELECT i FROM (
+                      SELECT generate_series(array_lower($1,1),array_upper($1,1))
+                   ) g(i)
+                   WHERE $1[i] = $2
+                   LIMIT 1;
+                 $$ LANGUAGE SQL IMMUTABLE;""".format(**config))
+
+    # Do an initial first pass and merge all exact duplicates
     c.execute("""DROP TABLE IF EXISTS {schema}.entries_unique""".format(**config))
     c.execute("""CREATE TABLE {schema}.entries_unique AS (
                     SELECT {columns}, array_agg({key}) as src_ids FROM {table}
@@ -311,7 +322,7 @@ def create_blocking(deduper, con, config):
     logging.info("creating {schema}.smaller_coverage".format(**config))
     c.execute("CREATE TABLE {schema}.smaller_coverage "
               " AS (SELECT _unique_id, block_id, "
-              " sorted_ids[:(idx(sorted_ids, block_id) - 1)] "
+              " sorted_ids[{schema}.idx(sorted_ids, block_id) - 1] "
               "      AS smaller_ids "
               " FROM {schema}.plural_block INNER JOIN {schema}.covered_blocks "
               " USING (_unique_id))".format(**config))
