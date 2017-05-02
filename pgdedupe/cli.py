@@ -26,8 +26,12 @@ START_TIME = time.time()
 
 
 @click.command()
-@click.option('--config', help='YAML- or JSON-formatted configuration file.')
-@click.option('--db', help='YAML- or JSON-formatted database connection credentials.')
+@click.option('--config',
+              help='YAML- or JSON-formatted configuration file.',
+              required=True)
+@click.option('--db',
+              help='YAML- or JSON-formatted database connection credentials.',
+              required=True)
 def main(config, db, verbosity=2):
     log_level = logging.WARNING
     if verbosity == 1:
