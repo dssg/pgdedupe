@@ -45,14 +45,14 @@ specifies the following parameters::
 
 You can now create a sample CSV file with::
 
-	$ python generate_fake_dataset.py
+	$ python generate_fake_dataset.py --csv people.csv
 	creating people: 100%|█████████████████████| 9500/9500 [00:21<00:00, 445.38it/s]
 	adding twins: 100%|█████████████████████████| 500/500 [00:00<00:00, 1854.72it/s]
 	writing csv:  47%|███████████▋             | 4666/10000 [00:42<00:55, 96.28it/s]
 
 Once complete, store this example dataset in a database with::
 
-	$ python test/initialize_db.py
+	$ python test/initialize_db.py --db database.yml --csv people.csv
 	CREATE SCHEMA
 	DROP TABLE
 	CREATE TABLE

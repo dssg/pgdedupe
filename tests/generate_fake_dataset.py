@@ -1,5 +1,6 @@
 from __future__ import division
 
+import click
 from os import path
 import uuid
 import random
@@ -230,6 +231,12 @@ def create_csv(pop, filename, mean=20):
             for _ in range(int(random.expovariate(1/mean))+1):
                 p.write_row(csvwriter)
 
+@click.command()
+@click.option('--csv', help='Name of CSV file to create', default='people.csv')
+@click.option('--count', help='Number of unique individuals in the population', default=20000)
+def main(csv, count):
+    population = create_population(count)
+    create_csv(population, csv)
+
 if __name__ == '__main__':
-    population = create_population(20000)
-    create_csv(population, 'people.csv')
+    main()
