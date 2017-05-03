@@ -2,7 +2,7 @@
 History
 =======
 
-0.2.1 (2017-04-19)
+0.2.1 (2017-05-03)
 ------------------
 
 * Make command line arguments required, resulting in better error messages.
