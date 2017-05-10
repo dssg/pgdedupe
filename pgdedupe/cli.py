@@ -322,7 +322,7 @@ def create_blocking(deduper, con, config):
     logging.info("creating {schema}.smaller_coverage".format(**config))
     c.execute("CREATE TABLE {schema}.smaller_coverage "
               " AS (SELECT _unique_id, block_id, "
-              " sorted_ids[1:{schema}.idx(sorted_ids, block_id) - 1] "
+              " sorted_ids[1:({schema}.idx(sorted_ids, block_id) - 1)] "
               "      AS smaller_ids "
               " FROM {schema}.plural_block INNER JOIN {schema}.covered_blocks "
               " USING (_unique_id))".format(**config))
