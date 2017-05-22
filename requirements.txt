@@ -1,7 +1,7 @@
 numpy==1.12.1
-pandas==0.19.2
+pandas==0.20.1
 psycopg2==2.7.1
-dedupe==1.6.10
+dedupe==1.6.13
 dedupe-variable-name==0.0.11
 fastcluster==1.1.23
 PyYAML==3.12
