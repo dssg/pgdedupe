@@ -220,8 +220,7 @@ def create_blocking(deduper, con, config):
     print('creating blocking_map database')
     c.execute("DROP TABLE IF EXISTS {schema}.blocking_map".format(**config))
     c.execute("CREATE TABLE {schema}.blocking_map "
-              "(block_key VARCHAR(200), _unique_id INT)".format(**config))  # TODO: THIS INT...
-    # ... needs to be dependent upon the column type of entry_id
+              "(block_key VARCHAR(200), _unique_id INT)".format(**config))
 
     # If dedupe learned a Index Predicate, we have to take a pass
     # through the data and create indices.
@@ -386,7 +385,7 @@ def write_results(clustered_dupes, con, config):
     c.execute("DROP TABLE IF EXISTS {schema}.entity_map".format(**config))
 
     c.execute("CREATE TABLE {schema}.entity_map "
-              "(_unique_id INT, canon_id INT, "  # TODO: THESE INTS MUST BE DYNAMIC
+              "(_unique_id INT, canon_id INT, "
               " cluster_score FLOAT, PRIMARY KEY(_unique_id))".format(**config))
 
     csv_file = tempfile.NamedTemporaryFile(prefix='entity_map_', delete=False,
