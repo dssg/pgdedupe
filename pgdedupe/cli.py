@@ -20,7 +20,8 @@ import psycopg2.extras
 import click
 import dedupe
 
-from . import exact_matches
+import exact_matches
+from mssql import cli as mscli
 
 START_TIME = time.time()
 
@@ -41,9 +42,22 @@ def main(config, db, verbosity=2):
     logging.getLogger().setLevel(log_level)
 
     dbconfig = load_config(db)
-    con = psy.connect(cursor_factory=psycopg2.extras.RealDictCursor, **dbconfig)
+    config = load_config(config)
 
-    config = process_options(load_config(config))
+    dbconfig['type'] = dbconfig.get('type','postgres')
+    
+    # Check type of database; Default to Postgres
+    if dbconfig['type'] == 'mssql':
+        del dbconfig['type']
+        mscli.mssql_main(config, dbconfig)
+    else:
+        del dbconfig['type']
+        postgres_main(config, dbconfig)
+
+
+def postgres_main(config, db):
+    con = psy.connect(cursor_factory=psycopg2.extras.RealDictCursor, **dbconfig)
+    config = process_options(config)
 
     logging.info("Preprocessing...")
     preprocess(con, config)
