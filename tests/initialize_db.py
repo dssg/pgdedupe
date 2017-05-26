@@ -75,9 +75,15 @@ def init_mssql(db, csv_file):
             c.execute(query, tuple(data))
             con.commit()
 
-    c.execute("ALTER TABLE dedupe.entries ADD entry_id INT IDENTITY(1,1) PRIMARY KEY")
-    c.execute("ALTER TABLE dedupe.entries ADD full_name VARCHAR(100)")
-    c.execute("UPDATE dedupe.entries SET full_name = first_name + ' ' + last_name")
+    c.execute("""ALTER TABLE dedupe.entries ADD entry_id INT IDENTITY(1,1) PRIMARY KEY""")
+    c.execute("""ALTER TABLE dedupe.entries ADD full_name VARCHAR(100)""")
+    c.execute("""UPDATE dedupe.entries SET full_name = first_name + ' ' + last_name""")
+    c.execute("""UPDATE dedupe.entries SET first_name = NULL where first_name = ''""")
+    c.execute("""UPDATE dedupe.entries SET last_name = NULL where last_name=''""")
+    c.execute("""UPDATE dedupe.entries SET ssn = NULL where ssn=''""")
+    c.execute("""UPDATE dedupe.entries SET sex = NULL where sex=''""")
+    c.execute("""UPDATE dedupe.entries SET race = NULL where race=''""")
+    c.execute("""UPDATE dedupe.entries SET ethnicity = NULL where ethnicity=''""")
     con.commit()
 
 if __name__ == '__main__':
