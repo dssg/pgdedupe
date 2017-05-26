@@ -56,7 +56,7 @@ def main(config, db, verbosity=2):
 
 
 def postgres_main(config, db):
-    con = psy.connect(cursor_factory=psycopg2.extras.RealDictCursor, **dbconfig)
+    con = psy.connect(cursor_factory=psycopg2.extras.RealDictCursor, **db)
     config = process_options(config)
 
     logging.info("Preprocessing...")
@@ -183,7 +183,6 @@ def train(con, config):
                    FROM {schema}.entries_unique
                    ORDER BY _unique_id""".format(**config))
     temp_d = dict((i, row) for i, row in enumerate(cur))
-
     deduper.sample(temp_d, 75000)
 
     del temp_d

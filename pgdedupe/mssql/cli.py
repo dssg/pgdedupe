@@ -8,6 +8,7 @@ import csv
 import tempfile
 import time
 import logging
+import collections
 
 import random
 import numpy
@@ -28,10 +29,10 @@ def mssql_main(config, db):
 	
 	logging.info("Preprocessing...")
 	preprocess(con, config)
-	"""
+	
 	logging.info("Training...")
 	deduper = train(con, config)
-
+	"""
 	logging.info("Creating blocking table...")
 	create_blocking(deduper, con, config)
 
@@ -94,6 +95,19 @@ def process_options(c):
     return config
 
 
+def unicode_to_str(data):
+	if data == "":
+		data = None
+	if isinstance(data, basestring):
+		return str(data)
+	elif isinstance(data, collections.Mapping):
+		return dict(map(unicode_to_str, data.iteritems()))
+	elif isinstance(data, collections.Iterable):
+		return type(data)(map(unicode_to_str, data))
+	else:
+		return data
+
+
 def preprocess(con, config):
     c = con.cursor()
 
@@ -129,3 +143,67 @@ def preprocess(con, config):
     	WHERE {stuff_condition}""".format(**config))
    
     con.commit()
+
+
+# Training
+def train(con, config):
+    if config['seed'] is not None:
+        if os.environ.get('PYTHONHASHSEED', 'random') == 'random':
+            logging.warn("""dedupe is only deterministic with hash randomization disabled.
+                            Set the PYTHONHASHSEED environment variable to a constant.""")
+        random.seed(config['seed'])
+        numpy.random.seed(config['seed'])
+    if config['use_saved_model']:
+        print('reading from ', config['settings_file'])
+        with open(config['settings_file'], 'rb') as sf:
+            return dedupe.StaticDedupe(sf, num_cores=config['num_cores'])
+    # Create a new deduper object and pass our data model to it.
+    deduper = dedupe.Dedupe(config['all_fields'], num_cores=config['num_cores'])
+
+    cur = con.cursor(as_dict = True)
+
+    cur.execute("""SELECT {all_columns}
+                   FROM {schema}.entries_unique
+                   ORDER BY _unique_id""".format(**config))
+    temp_d = dict((i, unicode_to_str(row)) for i, row in enumerate(cur))
+
+    deduper.sample(temp_d, 75000)
+
+    del temp_d
+    # If we have training data saved from a previous run of dedupe,
+    # look for it an load it in.
+    #
+    # __Note:__ if you want to train from
+    # scratch, delete the training_file
+    if os.path.exists(config['training_file']):
+        print('reading labeled examples from ', config['training_file'])
+        with open(config['training_file']) as tf:
+            deduper.readTraining(tf)
+
+    if config['prompt_for_labels']:
+        # ## Active learning
+        print('starting active labeling...')
+        # Starts the training loop. Dedupe will find the next pair of records
+        # it is least certain about and ask you to label them as duplicates
+        # or not.
+
+        # use 'y', 'n' and 'u' keys to flag duplicates
+        # press 'f' when you are finished
+        dedupe.convenience.consoleLabel(deduper)
+        # When finished, save our labeled, training pairs to disk
+        with open(config['training_file'], 'w') as tf:
+            deduper.writeTraining(tf)
+
+    # `recall` is the proportion of true dupes pairs that the learned
+    # rules must cover. You may want to reduce this if your are making
+    # too many blocks and too many comparisons.
+    deduper.train(recall=config['recall'])
+
+    with open(config['settings_file'], 'wb') as sf:
+        deduper.writeSettings(sf)
+
+    # We can now remove some of the memory hobbing objects we used
+    # for training
+    deduper.cleanupTraining()
+    return deduper
+
