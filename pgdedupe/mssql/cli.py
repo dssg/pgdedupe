@@ -32,10 +32,10 @@ def mssql_main(config, db):
 	
 	logging.info("Training...")
 	deduper = train(con, config)
-	"""
+	
 	logging.info("Creating blocking table...")
 	create_blocking(deduper, con, config)
-
+	"""
 	logging.info("Clustering...")
 	clustered_dupes = cluster(deduper, con, config)
 
@@ -207,3 +207,122 @@ def train(con, config):
     deduper.cleanupTraining()
     return deduper
 
+
+# Blocking
+def create_blocking(deduper, con, config):
+    c = con.cursor()
+
+    # To run blocking on such a large set of data, we create a separate table
+    # that contains blocking keys and record ids
+    print('creating blocking_map database')
+    c.execute("IF OBJECT_ID('{schema}.blocking_map', 'U') IS NOT NULL DROP TABLE {schema}.blocking_map".format(**config))
+    c.execute("CREATE TABLE {schema}.blocking_map "
+              "(block_key VARCHAR(200), _unique_id INT)".format(**config))  # TODO: THIS INT...
+    # ... needs to be dependent upon the column type of entry_id
+
+    # If dedupe learned a Index Predicate, we have to take a pass
+    # through the data and create indices.
+    print('creating inverted index')
+
+    for field in deduper.blocker.index_fields:
+        c2 = con.cursor(as_dict = True)
+        c2.execute("SELECT DISTINCT {0} FROM {schema}.entries_unique".format(field, **config))
+        field_data = ( unicode_to_str(row)[field] for row in c2)
+        deduper.blocker.index(field_data, field)
+        c2.close()
+
+    # Now we are ready to write our blocking map table by creating a
+    # generator that yields unique `(block_key, donor_id)` tuples.
+    print('writing blocking map')
+
+    c3 = con.cursor(as_dict = True)
+    c3.execute("SELECT {all_columns} FROM {schema}.entries_unique".format(**config))
+    full_data = ((row['_unique_id'], unicode_to_str(row)) for row in c3)
+    b_data = deduper.blocker(full_data)
+
+    # Write out blocking map to CSV so we can quickly load in with
+    # Postgres COPY
+    csv_file = tempfile.NamedTemporaryFile(prefix='blocks_', delete=False, mode='w')
+    csv_writer = csv.writer(csv_file)
+    csv_writer.writerows(b_data)
+    c3.close()
+    csv_file.close()
+
+    f = open(csv_file.name, 'r')
+
+    # write from csv to SQL
+    with open(csv_file.name,'r') as f:
+    	reader = csv.reader(f)
+    	data = next(reader)
+    	query = "INSERT INTO {schema}.blocking_map".format(**config)
+    	query = query + " VALUES ({0})".format(','.join(['%s']*len(data)))
+    	cc = con.cursor()
+    	cc.execute(query,tuple(data))
+    	for data in reader:
+    		cc.execute(query,tuple(data))
+
+    os.remove(csv_file.name)
+    con.commit()
+
+    # Remove blocks that contain only one record, sort by block key and
+    # donor, key and index blocking map.
+    #
+    # These steps, particularly the sorting will let us quickly create
+    # blocks of data for comparison
+    print('prepare blocking table. this will probably take a while ...')
+
+    logging.info("indexing block_key")
+    c.execute("CREATE INDEX blocking_map_key_idx "
+              " ON {schema}.blocking_map (block_key)".format(**config))
+    
+    c.execute("IF OBJECT_ID('{schema}.plural_key', 'U') IS NOT NULL DROP TABLE {schema}.plural_key".format(**config))
+    c.execute("IF OBJECT_ID('{schema}.plural_block', 'U') IS NOT NULL DROP TABLE {schema}.plural_block".format(**config))
+    c.execute("IF OBJECT_ID('{schema}.covered_blocks', 'U') IS NOT NULL DROP TABLE {schema}.covered_blocks".format(**config))
+    c.execute("IF OBJECT_ID('{schema}.smaller_coverage', 'U') IS NOT NULL DROP TABLE {schema}.smaller_coverage".format(**config))
+
+    # Many block_keys will only form blocks that contain a single
+    # record. Since there are no comparisons possible withing such a
+    # singleton block we can ignore them.
+    logging.info("calculating {schema}.plural_key".format(**config))
+    c.execute("CREATE TABLE {schema}.plural_key "
+              "(block_key VARCHAR(200), "
+              " block_id INT IDENTITY(1,1) PRIMARY KEY)".format(**config))
+
+    c.execute("INSERT INTO {schema}.plural_key (block_key) "
+              "SELECT block_key FROM {schema}.blocking_map "
+              "GROUP BY block_key HAVING COUNT(*) > 1".format(**config))
+
+    logging.info("creating {schema}.block_key index".format(**config))
+    c.execute("CREATE UNIQUE INDEX block_key_idx "
+              " ON {schema}.plural_key (block_key)".format(**config))
+
+    logging.info("calculating {schema}.plural_block".format(**config))
+    c.execute("SELECT block_id, _unique_id INTO {schema}.plural_block"
+              " FROM {schema}.blocking_map AS bm INNER JOIN {schema}.plural_key AS pk"
+              " ON bm.block_key = pk.block_key".format(**config))
+
+    logging.info("adding _unique_id index and sorting index")
+    c.execute("CREATE INDEX plural_block_id_idx "
+              " ON {schema}.plural_block (_unique_id)".format(**config))
+    c.execute("CREATE UNIQUE INDEX plural_block_block_id_id_uniq "
+              " ON {schema}.plural_block (block_id, _unique_id)".format(**config))
+
+    # To use Kolb, et.al's Redundant Free Comparison scheme, we need to
+    # keep track of all the block_ids that are associated with a
+    # particular donor records.
+    # In particular, for every block of records, we need to keep
+    # track of a donor records's associated block_ids that are SMALLER than
+    # the current block's _unique_id.
+    logging.info("creating {schema}.smaller_coverage".format(**config))
+    c.execute("SELECT pb._unique_id, pbs.block_id,"
+    	" STUFF("
+    		"(SELECT CONVERT(varchar(100),block_id) + ','"
+    		" FROM {schema}.plural_block"
+    		" WHERE block_id < pbs.block_id AND _unique_id = pbs._unique_id"
+    		" FOR XML PATH('')),1,0,''"
+    	") AS smaller_ids"
+    	" INTO smaller_coverage"
+    	" FROM {schema}.plural_block AS pb INNER JOIN {schema}.plural_block AS pbs"
+    	" ON pb._unique_id = pbs._unique_id".format(**config))
+
+    con.commit()
