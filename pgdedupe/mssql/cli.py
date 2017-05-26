@@ -18,7 +18,7 @@ import pymssql
 
 import dedupe
 
-sys.path.append(os.path.abspath('../'))
+sys.path.append(os.path.abspath('pgdedupe'))
 import exact_matches
 
 START_TIME = time.time()

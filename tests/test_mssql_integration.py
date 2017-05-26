@@ -5,27 +5,31 @@ import tests.generate_fake_dataset as gen
 import tests.initialize_db as initdb
 
 import os
-import yaml
+import json
 import pymssql
 
 
 def test_mssql_integration():
-    try:
-        with open('db.yaml','r') as f:
-            db = yaml.load(f)
-    except IOError:
-        raise Exception("Please create db.yaml with all the SQL Server credentials")
-    
+    # SQL Server credential for test on docker
+    db = {
+        'host': 'localhost', 
+        'password': '\PvVpsg_H5(', 
+        'user': 'sa', 
+        'database': 'test'
+    }
+
     pop = gen.create_population(2000)
     gen.create_csv(pop, 'pop.csv')
 
-    if 'type' in db: 
-        del db['type']
-
     initdb.init_mssql(db, 'pop.csv')
     
+    with open('db.json','w') as f:
+        db['type'] = 'mssql'
+        json.dump(db, f)
+        del db['type']
+
     runner = CliRunner()
-    result = runner.invoke(cli.main, ['--config', 'config.yaml', '--db', 'db.yaml'])
+    result = runner.invoke(cli.main, ['--config', 'config.yaml', '--db', 'db.json'])
     assert result.exit_code == 0
 
     con = pymssql.connect(**db)
