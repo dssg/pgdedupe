@@ -35,10 +35,10 @@ def mssql_main(config, db):
 	
 	logging.info("Creating blocking table...")
 	create_blocking(deduper, con, config)
-	"""
+
 	logging.info("Clustering...")
 	clustered_dupes = cluster(deduper, con, config)
-
+	"""
 	logging.info("Writing results...")
 	write_results(clustered_dupes, con, config)
 
@@ -316,13 +316,62 @@ def create_blocking(deduper, con, config):
     logging.info("creating {schema}.smaller_coverage".format(**config))
     c.execute("SELECT pb._unique_id, pbs.block_id,"
     	" STUFF("
-    		"(SELECT CONVERT(varchar(100),block_id) + ','"
+    		"(SELECT CONVERT(varchar(100), block_id) + ','"
     		" FROM {schema}.plural_block"
     		" WHERE block_id < pbs.block_id AND _unique_id = pbs._unique_id"
     		" FOR XML PATH('')),1,0,''"
     	") AS smaller_ids"
-    	" INTO smaller_coverage"
+    	" INTO {schema}.smaller_coverage"
     	" FROM {schema}.plural_block AS pb INNER JOIN {schema}.plural_block AS pbs"
     	" ON pb._unique_id = pbs._unique_id".format(**config))
 
     con.commit()
+
+
+# Clustering
+def candidates_gen(result_set):
+    lset = set
+
+    block_id = None
+    records = []
+    i = 0
+    for row in result_set:
+    	row = unicode_to_str(row)
+        if row['block_id'] != block_id:
+            if records:
+                yield records
+
+            block_id = row['block_id']
+            records = []
+            i += 1
+
+            if i % 10000 == 0:
+                print(i, "blocks")
+                print(time.time() - START_TIME, "seconds")
+
+        smaller_ids = row['smaller_ids']
+
+        if smaller_ids:
+        	smaller_ids = lset([int(x) for x in smaller_ids.split(',')[:-1]])
+        else:
+            smaller_ids = lset([])
+
+        records.append((row['_unique_id'], row, smaller_ids))
+
+    if records:
+        yield records
+
+
+def cluster(deduper, con, config):
+    c4 = con.cursor(as_dict = True)
+    # Doing so to remove "Ambiguous column name '_unique_id' error
+    all_columns_unambiguous = config['all_columns'].replace('_unique_id','{schema}.smaller_coverage._unique_id'.format(**config))
+    c4.execute("SELECT " + all_columns_unambiguous +
+    			", block_id, smaller_ids"
+    			" FROM {schema}.smaller_coverage"
+               	" INNER JOIN {schema}.entries_unique"
+               	" ON {schema}.smaller_coverage._unique_id = {schema}.entries_unique._unique_id"
+               	" ORDER BY block_id".format(**config))
+
+
+    return deduper.matchBlocks(candidates_gen(c4), threshold=config['threshold'])
