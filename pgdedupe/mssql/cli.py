@@ -5,6 +5,7 @@ Based on: https://github.com/datamade/dedupe-examples/tree/master/pgsql_big_dedu
 """
 import os
 import csv
+import sys
 import tempfile
 import time
 import logging
@@ -17,7 +18,8 @@ import pymssql
 
 import dedupe
 
-#from . import exact_matches
+sys.path.append(os.path.abspath('../'))
+import exact_matches
 
 START_TIME = time.time()
 
@@ -38,13 +40,13 @@ def mssql_main(config, db):
 
 	logging.info("Clustering...")
 	clustered_dupes = cluster(deduper, con, config)
-	
+
 	logging.info("Writing results...")
 	write_results(clustered_dupes, con, config)
-	"""
+	
 	logging.info("Applying results...")
 	apply_results(con, config)
-	"""
+	
 	# Close our database connection
 	con.close()
 
@@ -138,7 +140,7 @@ def preprocess(con, config):
               " ADD _unique_id INT IDENTITY(1,1) PRIMARY KEY".format(**config))
 
     c.execute("IF OBJECT_ID('{schema}.entries_src_ids', 'U') IS NOT NULL DROP TABLE {schema}.entries_src_ids".format(**config))
-    c.execute("""SELECT t._unique_id, {table}.{key}
+    c.execute("""SELECT t._unique_id, {table}.{key} INTO {schema}.entries_src_ids
     	FROM {schema}.entries_unique as t, {table}
     	WHERE {stuff_condition}""".format(**config))
    
@@ -381,7 +383,6 @@ def write_results(clustered_dupes, con, config):
     # all refer to the same entity. We write this out onto an entity map
     # table
     c.execute("IF OBJECT_ID('{schema}.entity_map', 'U') IS NOT NULL DROP TABLE {schema}.entity_map".format(**config))
-
     c.execute("CREATE TABLE {schema}.entity_map "
               "(_unique_id INT, canon_id INT, "  # TODO: THESE INTS MUST BE DYNAMIC
               " cluster_score FLOAT, PRIMARY KEY(_unique_id))".format(**config))
@@ -418,3 +419,65 @@ def write_results(clustered_dupes, con, config):
     # Print out the number of duplicates found
     print('# duplicate sets')
     print(len(clustered_dupes))
+
+
+# ## Payoff
+def apply_results(con, config):
+    c = con.cursor()
+    # Dedupe only cares about matched records; it doesn't have a canonical id
+    # for singleton records. So we create a mapping table between *all*
+    # _unique_ids to their canonical_id (or back to themselves if singletons).
+    c.execute("IF OBJECT_ID('{schema}.map', 'U') IS NOT NULL DROP TABLE {schema}.map".format(**config))
+    c.execute("SELECT COALESCE(canon_id, ems._unique_id) AS canon_id,"
+              "ems._unique_id, "
+              "COALESCE(cluster_score, 1.0) AS cluster_score "
+              "INTO {schema}.map "
+              "FROM {schema}.entity_map AS em "
+              "RIGHT JOIN {schema}.entries_unique AS ems "
+              "ON em._unique_id = ems._unique_id".format(**config))
+
+    # Remove the dedupe_id column from entries if it already exists 
+    c.execute("IF (SELECT COL_LENGTH('{table}', 'dedupe_id')) IS NOT NULL ALTER TABLE {table} DROP COLUMN dedupe_id".format(**config))
+
+    # Merge clusters based upon exact matches of a subset of fields. This can
+    # be done on the unique table or on the actual entries table, but it's more
+    # efficient to do it now.
+    available_fields = [f['field'] for f in config['fields']]
+    for cols in config['merge_exact']:
+        if not all(c in available_fields for c in cols):
+            continue
+        exact_matches.merge_mssql('{}.map'.format(config['schema']), 'canon_id',
+                            '{}.entries_unique'.format(config['schema']), '_unique_id',
+                            cols, config['schema'], con)
+
+    # Add that integer id back to the unique_entries table
+    c.execute("IF (SELECT COL_LENGTH('{schema}.entries_unique', 'dedupe_id')) IS NOT NULL ALTER TABLE {schema}.entries_unique DROP COLUMN dedupe_id".format(**config))
+    c.execute("ALTER TABLE {schema}.entries_unique ADD dedupe_id INT".format(**config))
+    c.execute("UPDATE {schema}.entries_unique SET dedupe_id = m.canon_id "
+              "FROM {schema}.map AS m WHERE {schema}.entries_unique._unique_id = m._unique_id".format(**config))
+    con.commit()
+
+    # And now map it the whole way back to the entries table
+    # create a mapping between the unique entries and the original entries
+    c.execute("IF OBJECT_ID('{schema}.unique_map', 'U') IS NOT NULL DROP TABLE {schema}.unique_map".format(**config))
+    c.execute("""SELECT eu.dedupe_id, {schema}.entries_src_ids.{key} as {key} INTO {schema}.unique_map
+    	FROM {schema}.entries_unique AS eu INNER JOIN {schema}.entries_src_ids
+    	ON eu._unique_id = {schema}.entries_src_ids._unique_id""".format(**config))
+
+    # Grab the remainder of the exact merges:
+    for cols in config['merge_exact']:
+        if all(c in available_fields for c in cols):
+            continue
+        exact_matches.merge_mssql('{}.unique_map'.format(config['schema']), 'dedupe_id',
+                            config['table'], config['key'],
+                            cols, config['schema'], con)
+    
+
+    c.execute("ALTER TABLE {table} ADD dedupe_id INT".format(**config))
+    c.execute("UPDATE {table} SET dedupe_id = t.dedupe_id "
+              "FROM {schema}.entries_unique AS t WHERE {stuff_condition}".format(**config))
+    c.execute("UPDATE {table} SET dedupe_id = m.dedupe_id "
+              "FROM {schema}.unique_map AS m WHERE {table}.{key} = m.{key}".format(**config))
+
+    con.commit()
+    c.close()
