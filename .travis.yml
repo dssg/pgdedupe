@@ -5,8 +5,15 @@ notifications:
   email: false
 services:
   - postgresql
+  - docker
 addons:
   postgresql: "9.4"
+
+before_install:
+  - docker build -t microsoft/mssql-server-linux
+  - docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=\PvVpsg_H5('*M6k' -p 1433:1433 -d microsoft/mssql-server-linux
+  - docker ps -a
+  - sqlcmd -H localhost -U SA -P \PvVpsg_H5( -Q 'create database test'
 
 env:
 - TOXENV=py35
