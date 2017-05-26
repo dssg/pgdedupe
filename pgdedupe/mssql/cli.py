@@ -38,10 +38,10 @@ def mssql_main(config, db):
 
 	logging.info("Clustering...")
 	clustered_dupes = cluster(deduper, con, config)
-	"""
+	
 	logging.info("Writing results...")
 	write_results(clustered_dupes, con, config)
-
+	"""
 	logging.info("Applying results...")
 	apply_results(con, config)
 	"""
@@ -248,8 +248,6 @@ def create_blocking(deduper, con, config):
     c3.close()
     csv_file.close()
 
-    f = open(csv_file.name, 'r')
-
     # write from csv to SQL
     with open(csv_file.name,'r') as f:
     	reader = csv.reader(f)
@@ -373,5 +371,50 @@ def cluster(deduper, con, config):
                	" ON {schema}.smaller_coverage._unique_id = {schema}.entries_unique._unique_id"
                	" ORDER BY block_id".format(**config))
 
-
     return deduper.matchBlocks(candidates_gen(c4), threshold=config['threshold'])
+
+
+# Writing out results
+def write_results(clustered_dupes, con, config):
+    c = con.cursor(as_dict = True)
+    # We now have a sequence of tuples of donor ids that dedupe believes
+    # all refer to the same entity. We write this out onto an entity map
+    # table
+    c.execute("IF OBJECT_ID('{schema}.entity_map', 'U') IS NOT NULL DROP TABLE {schema}.entity_map".format(**config))
+
+    c.execute("CREATE TABLE {schema}.entity_map "
+              "(_unique_id INT, canon_id INT, "  # TODO: THESE INTS MUST BE DYNAMIC
+              " cluster_score FLOAT, PRIMARY KEY(_unique_id))".format(**config))
+
+    csv_file = tempfile.NamedTemporaryFile(prefix='entity_map_', delete=False,
+                                           mode='w')
+    csv_writer = csv.writer(csv_file)
+
+    for cluster, scores in clustered_dupes:
+        cluster_id = cluster[0]
+        for donor_id, score in zip(cluster, scores):
+            csv_writer.writerow([donor_id, cluster_id, score])
+
+    csv_file.close()
+
+    # write from csv to SQL
+    with open(csv_file.name,'r') as f:
+    	reader = csv.reader(f)
+    	data = next(reader)
+    	query = "INSERT INTO {schema}.entity_map".format(**config)
+    	query = query + " VALUES ({0})".format(','.join(['%s']*len(data)))
+    	cc = con.cursor()
+    	cc.execute(query,tuple(data))
+    	for data in reader:
+    		cc.execute(query,tuple(data))
+
+    os.remove(csv_file.name)
+
+    con.commit()
+
+    c.execute("CREATE INDEX head_index ON {schema}.entity_map (canon_id)".format(**config))
+    con.commit()
+
+    # Print out the number of duplicates found
+    print('# duplicate sets')
+    print(len(clustered_dupes))
