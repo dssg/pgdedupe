@@ -47,12 +47,14 @@ def init_mssql(db, csv_file):
     # Create DB for testing. Do not nned to install sql-tools in Travis
     con.autocommit(True)
     c = con.cursor()
-    c.execute("""CREATE DATABASE test""")
+    c.execute("IF NOT EXISTS(select * from sys.databases where name='test') CREATE DATABASE test")
     c.close()
-    con.autocommit(False)
+    con.close()
+    
 
+    db['database'] = 'test'
+    con = pymssql.connect(**db)
     c = con.cursor()
-
     c.execute("""IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'dedupe') 
             BEGIN
             EXEC('CREATE SCHEMA dedupe')
@@ -93,6 +95,7 @@ def init_mssql(db, csv_file):
     c.execute("""UPDATE dedupe.entries SET race = NULL where race=''""")
     c.execute("""UPDATE dedupe.entries SET ethnicity = NULL where ethnicity=''""")
     con.commit()
+    con.close()
 
 if __name__ == '__main__':
     main()

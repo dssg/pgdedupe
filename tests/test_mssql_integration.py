@@ -15,7 +15,7 @@ def test_mssql_integration():
         'host': 'localhost', 
         'password': '1@34dedupe', 
         'user': 'sa',
-        'port': 14533
+        'port': 15433
     }
 
     pop = gen.create_population(2000)
@@ -40,5 +40,6 @@ def test_mssql_integration():
 
     # Delete database test created
     con.autocommit(True)
+    c.execute("USE master")
     c.execute("DROP DATABASE test")
-    c.close()
+    con.close()
