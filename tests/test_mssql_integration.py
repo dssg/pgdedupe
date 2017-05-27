@@ -14,8 +14,7 @@ def test_mssql_integration():
     db = {
         'host': 'localhost', 
         'password': '1@34dedupe', 
-        'user': 'sa', 
-        'database': 'test',
+        'user': 'sa',
         'port': 14533
     }
 
@@ -26,6 +25,7 @@ def test_mssql_integration():
     
     with open('db.json','w') as f:
         db['type'] = 'mssql'
+        db['database'] = 'test'
         json.dump(db, f)
         del db['type']
 
@@ -37,3 +37,8 @@ def test_mssql_integration():
     c = con.cursor()
     c.execute("SELECT count(distinct dedupe_id) FROM dedupe.entries")
     assert(c.fetchone()[0] < 4000) # Rudimentary quality check
+
+    # Delete database test created
+    con.autocommit(True)
+    c.execute("DROP DATABASE test")
+    c.close()

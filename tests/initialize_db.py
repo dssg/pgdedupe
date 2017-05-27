@@ -43,6 +43,14 @@ def init(db, csv):
 def init_mssql(db, csv_file):
     # Connect to database and use cursor to insert csv data to table
     con = pymssql.connect(**db)
+    
+    # Create DB for testing. Do not nned to install sql-tools in Travis
+    con.autocommit(True)
+    c = con.cursor()
+    c.execute("""CREATE DATABASE test""")
+    c.close()
+    con.autocommit(False)
+
     c = con.cursor()
 
     c.execute("""IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'dedupe') 
