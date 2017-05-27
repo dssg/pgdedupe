@@ -3,8 +3,9 @@
 import csv
 import tempfile
 
-import pandas as pd
 import numpy as np
+
+import pandas as pd
 
 
 def follow(id1, edges, visited=None, weak=True):
@@ -103,8 +104,8 @@ def merge(mapping_table, mapping_id,
 
 
 def merge_mssql(mapping_table, mapping_id,
-          entries_table, entry_id,
-          exact_columns, schema, con):
+                entries_table, entry_id,
+                exact_columns, schema, con):
     """
     Given a mapping table that identifies clusters of entries in an entry table
     that are linked together, use a subset of columns to perform exact record-
@@ -132,8 +133,9 @@ def merge_mssql(mapping_table, mapping_id,
     ON {exact_columns_join}
     where t1.{cluster} > id2
     group by t1.{cluster}, id2
-    """.format(cols=', '.join(exact_columns), exact_columns_join=exact_columns_join, entries=entries_table,
-               mapping=mapping_table, key=entry_id, cluster=mapping_id), con)
+    """.format(cols=', '.join(exact_columns), exact_columns_join=exact_columns_join,
+               entries=entries_table, mapping=mapping_table,
+               key=entry_id, cluster=mapping_id), con)
 
     components = components_dict_to_df(get_components(edges))
 
@@ -142,17 +144,18 @@ def merge_mssql(mapping_table, mapping_id,
         components.to_csv(f, index=False, header=False)
         t = schema + ".merged_" + "_".join(exact_columns)
         c.execute("IF OBJECT_ID('{}', 'U') IS NOT NULL DROP TABLE {}".format(t, t))
-        c.execute("""SELECT TOP 0 {id} as id1, {id} as id2 INTO {t} FROM {m}""".format(t=t, id=mapping_id, m=mapping_table))
+        c.execute("""SELECT TOP 0 {id} as id1, {id} as id2 INTO {t} FROM {m}""".format(t=t,
+                  id=mapping_id, m=mapping_table))
         f.seek(0)
         reader = csv.reader(f)
         data = next(reader)
         query = "INSERT INTO {}".format(t)
-        query = query + " VALUES ({0})".format(','.join(['%s']*len(data)))
+        query = query + " VALUES ({0})".format(','.join(['%s'] * len(data)))
         cc = con.cursor()
-        cc.execute(query,tuple(data))
+        cc.execute(query, tuple(data))
         for data in reader:
-            cc.execute(query,tuple(data))
-    
+            cc.execute(query, tuple(data))
+
     c.execute("""UPDATE {m}
                  SET {id} = t.id1
                  FROM {t} AS t

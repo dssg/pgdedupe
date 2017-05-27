@@ -1,10 +1,13 @@
-import click
-import yaml
+
+import csv
 import os
-from os import path, system
+from os import system
+
+import click
 
 import pymssql
-import csv
+
+import yaml
 
 
 @click.command()
@@ -13,10 +16,11 @@ import csv
 def main(db, csv):
     init(db, csv)
 
+
 def init(db, csv):
     # We'll shell out to `psql`, so set the environment variables for it:
     with open(db) as f:
-        for k,v in yaml.load(f).items():
+        for k, v in yaml.load(f).items():
             os.environ['PG' + k.upper()] = str(v) if v else ""
 
     # And create the table from the csv file with psql
@@ -43,22 +47,21 @@ def init(db, csv):
 def init_mssql(db, csv_file):
     # Connect to database and use cursor to insert csv data to table
     con = pymssql.connect(**db)
-    
+
     # Create DB for testing. Do not nned to install sql-tools in Travis
     con.autocommit(True)
     c = con.cursor()
     c.execute("IF NOT EXISTS(select * from sys.databases where name='test') CREATE DATABASE test")
     c.close()
     con.close()
-    
 
     db['database'] = 'test'
     con = pymssql.connect(**db)
     c = con.cursor()
-    c.execute("""IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'dedupe') 
+    c.execute("""IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'dedupe')
             BEGIN
             EXEC('CREATE SCHEMA dedupe')
-            END""")    
+            END""")
 
     c.execute("IF OBJECT_ID('dedupe.entries', 'U') IS NOT NULL DROP TABLE dedupe.entries;")
 
@@ -77,10 +80,11 @@ def init_mssql(db, csv_file):
     con.commit()
 
     # Read CSV
-    with open(csv_file,'r') as f:
+    with open(csv_file, 'r') as f:
         reader = csv.reader(f)
         columns = next(reader)
-        query = "INSERT INTO dedupe.entries({0}) VALUES ({1})".format(', '.join(columns), ', '.join(['%s'] * len(columns)))
+        query = "INSERT INTO dedupe.entries({0}) VALUES ({1})".format(', '.join(columns),
+                                                                      ', '.join(['%s'] * len(columns)))
         for data in reader:
             c.execute(query, tuple(data))
             con.commit()
