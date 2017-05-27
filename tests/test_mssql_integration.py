@@ -13,9 +13,10 @@ def test_mssql_integration():
     # SQL Server credential for test on docker
     db = {
         'host': 'localhost', 
-        'password': '\PvVpsg_H5(', 
+        'password': '1@34dedupe', 
         'user': 'sa', 
-        'database': 'test'
+        'database': 'test',
+        'port': 14533
     }
 
     pop = gen.create_population(2000)
