@@ -16,7 +16,7 @@ def test_mssql_integration():
     # SQL Server credential for test on docker
     db = {
         'host': 'localhost',
-        'password': 'helph@lp1',
+        'password': '1@34dedupe',
         'user': 'sa',
         'port': 15433
     }
