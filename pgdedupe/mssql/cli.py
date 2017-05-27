@@ -22,6 +22,7 @@ sys.path.append(os.path.abspath('pgdedupe'))
 from pgdedupe import exact_matches
 
 START_TIME = time.time()
+PYTHON_VERSION = sys.version_info[0]
 
 
 def mssql_main(config, db):
@@ -102,14 +103,24 @@ def process_options(c):
 def unicode_to_str(data):
     if data == "":
         data = None
-    if isinstance(data, basestring):
-        return str(data)
-    elif isinstance(data, collections.Mapping):
-        return dict(map(unicode_to_str, data.iteritems()))
-    elif isinstance(data, collections.Iterable):
-        return type(data)(map(unicode_to_str, data))
+    if PYTHON_VERSION < 3:
+        if isinstance(data, basestring):
+            return str(data)
+        elif isinstance(data, collections.Mapping):
+            return dict(map(unicode_to_str, data.iteritems()))
+        elif isinstance(data, collections.Iterable):
+            return type(data)(map(unicode_to_str, data))
+        else:
+            return data
     else:
-        return data
+        if isinstance(data, str):
+            return str(data)
+        elif isinstance(data, collections.Mapping):
+            return dict(map(unicode_to_str, data.items()))
+        elif isinstance(data, collections.Iterable):
+            return type(data)(map(unicode_to_str, data))
+        else:
+            return data
 
 
 def preprocess(con, config):

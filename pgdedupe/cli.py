@@ -3,24 +3,30 @@
 """
 Based on: https://github.com/datamade/dedupe-examples/tree/master/pgsql_big_dedupe_example
 """
-import os
 import csv
+import json
+import logging
+import os
+import random
+import sys
 import tempfile
 import time
-import logging
 
-import random
+import click
+
+import dedupe
+
 import numpy
 
-import json
-import yaml
 import psycopg2 as psy
 import psycopg2.extras
 
-import click
-import dedupe
+import yaml
 
-import exact_matches
+sys.path.append(os.path.abspath('pgdedupe'))
+sys.path.append(os.path.abspath('pgdedupe/mssql'))
+
+from pgdedupe import exact_matches
 from mssql import cli as mscli
 
 START_TIME = time.time()
@@ -44,8 +50,8 @@ def main(config, db, verbosity=2):
     dbconfig = load_config(db)
     config = load_config(config)
 
-    dbconfig['type'] = dbconfig.get('type','postgres')
-    
+    dbconfig['type'] = dbconfig.get('type', 'postgres')
+
     # Check type of database; Default to Postgres
     if dbconfig['type'] == 'mssql':
         del dbconfig['type']
