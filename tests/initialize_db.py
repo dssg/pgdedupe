@@ -30,6 +30,10 @@ def main(db, csv):
 def init(db, csv):
     # We'll shell out to `psql`, so set the environment variables for it:
     # And create the table from the csv file with psql
+    with open(db) as f:
+        for k, v in yaml.load(f).items():
+            os.environ['PG' + k.upper()] = str(v) if v else ""
+
     system("""psql -c "CREATE SCHEMA IF NOT EXISTS dedupe;" """)
     system("""psql -c "DROP TABLE IF EXISTS dedupe.entries;" """)
 
