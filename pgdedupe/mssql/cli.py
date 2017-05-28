@@ -93,7 +93,7 @@ def process_options(c):
         COLLATE SQL_Latin1_General_CP1_CS_AS""".format(x, config['table'], x) for x in columns])
     # By default MS Sql Server is case insensitive
     # Need to make it insensitive as per Dedupe
-    config['case_sensitive_columns'] = ' , '.join(["""{} COLLATE 
+    config['case_sensitive_columns'] = ' , '.join(["""{} COLLATE
         SQL_Latin1_General_CP1_CS_AS AS {}""".format(x, x) for x in columns])
     config['columns'] = ', '.join(columns)
     config['all_columns'] = ', '.join(columns | set(['_unique_id']))

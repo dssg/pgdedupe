@@ -14,19 +14,25 @@ import yaml
 @click.option('--db', help='YAML-formatted database connection credentials.', required=True)
 @click.option('--csv', help='CSV file to load into the database table', required=True)
 def main(db, csv):
-    init(db, csv)
+
+    with open(db) as f:
+        db_config = yaml.load(f)
+        for k, v in db_config.items():
+            os.environ['PG' + k.upper()] = str(v) if v else ""
+
+    if db_config.get('type', 'postgres') == 'mssql':
+        del db_config['type']
+        init_mssql(db_config, csv)
+    else:
+        init(db, csv)
 
 
 def init(db, csv):
     # We'll shell out to `psql`, so set the environment variables for it:
-    with open(db) as f:
-        for k, v in yaml.load(f).items():
-            os.environ['PG' + k.upper()] = str(v) if v else ""
-
     # And create the table from the csv file with psql
     system("""psql -c "CREATE SCHEMA IF NOT EXISTS dedupe;" """)
     system("""psql -c "DROP TABLE IF EXISTS dedupe.entries;" """)
-    # system("""csvsql --no-constraints -i postgresql --table entries --db-schema dedupe < test/people.csv | psql """)
+
     system("""psql -c "
          CREATE TABLE "dedupe.entries" (
              uuid UUID,
@@ -83,8 +89,8 @@ def init_mssql(db, csv_file):
     with open(csv_file, 'r') as f:
         reader = csv.reader(f)
         columns = next(reader)
-        query = "INSERT INTO dedupe.entries({0}) VALUES ({1})".format(', '.join(columns),
-                                                                      ', '.join(['%s'] * len(columns)))
+        query = """INSERT INTO dedupe.entries({0})
+        VALUES ({1})""".format(', '.join(columns), ', '.join(['%s'] * len(columns)))
         for data in reader:
             c.execute(query, tuple(data))
             con.commit()
