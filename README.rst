@@ -43,6 +43,8 @@ specifies the following parameters::
 	host:
 	port:
 
+To connect to Microsoft SQL Server, an additional parameter ``type: mssql`` needs to added to ``database.yml`` file.
+
 You can now create a sample CSV file with::
 
 	$ python generate_fake_dataset.py --csv people.csv
