@@ -91,15 +91,19 @@ def process_options(c):
     # Used to nested sub-queries
 
     config['stuff_condition'] = ' AND '.join(
-        ["""(t.{name} COLLATE SQL_Latin1_General_CP1_CS_AS = {table}.{name}
-        COLLATE SQL_Latin1_General_CP1_CS_AS
-        OR ISNULL(t.{name}, {table}.{name}) IS NULL)""".format(
+        ["""(({table}.{name} IS NULL AND t.{name} IS NULL) OR t.{name} = {table}.{name}
+        COLLATE SQL_Latin1_General_CP1_CS_AS)""".format(
          name=x, table=config['table']) for x in columns])
+
+    config['column_select_table'] = ','.join(["{table}.{name}"
+                                             .format(name=x,
+                                                     table=config['table']) for x in columns])
+    config['column_select_t'] = ','.join(["t.{name}".format(name=x) for x in columns])
 
     # By default MS Sql Server is case insensitive
     # Need to make it insensitive as per Dedupe
-    config['case_sensitive_columns'] = ' , '.join(["""{} COLLATE
-        SQL_Latin1_General_CP1_CS_AS AS {}""".format(x, x) for x in columns])
+    config['case_sensitive_columns'] = ' , '.join(["""{name} COLLATE
+        SQL_Latin1_General_CP1_CS_AS AS {name}""".format(name=x) for x in columns])
     config['columns'] = ', '.join(columns)
     config['all_columns'] = ', '.join(columns | set(['_unique_id']))
     return config
@@ -160,9 +164,16 @@ def preprocess(con, config):
 
     c.execute("IF OBJECT_ID('{schema}.entries_src_ids', 'U') IS NOT NULL "
               "DROP TABLE {schema}.entries_src_ids".format(**config))
+
+    c.execute("CREATE INDEX table_column_idx "
+              " ON {table} ({key}, {columns})".format(**config))
+    c.execute("CREATE INDEX {schema}_entries_unique_column_idx "
+              " ON {schema}.entries_unique (_unique_id, {columns})".format(**config))
     c.execute("""SELECT t._unique_id, {table}.{key} INTO {schema}.entries_src_ids
                     FROM {schema}.entries_unique as t, {table}
-                    WHERE {stuff_condition}""".format(**config))
+                    WHERE
+                    BINARY_CHECKSUM({column_select_table}) = BINARY_CHECKSUM({column_select_t})"""
+              .format(**config))
 
     con.commit()
 
@@ -507,9 +518,9 @@ def apply_results(con, config):
 
     c.execute("ALTER TABLE {table} ADD dedupe_id INT".format(**config))
     c.execute("UPDATE {table} SET dedupe_id = t.dedupe_id "
-              "FROM {schema}.entries_unique AS t WHERE {stuff_condition}".format(**config))
-    c.execute("UPDATE {table} SET dedupe_id = m.dedupe_id "
-              "FROM {schema}.unique_map AS m WHERE {table}.{key} = m.{key}".format(**config))
+              "FROM {schema}.entries_unique AS t WHERE "
+              "BINARY_CHECKSUM({column_select_table}) = BINARY_CHECKSUM({column_select_t})"
+              .format(**config))
 
     con.commit()
     c.close()
