@@ -89,8 +89,11 @@ def process_options(c):
         {'type': 'Interaction', 'interaction variables': x} for x in config['interactions']]
     columns = set([x['field'] for x in config['fields']])
     # Used to nested sub-queries
-    config['stuff_condition'] = ' AND '.join(["""t.{} COLLATE SQL_Latin1_General_CP1_CS_AS = {}.{}
-        COLLATE SQL_Latin1_General_CP1_CS_AS""".format(x, config['table'], x) for x in columns])
+    config['stuff_condition'] = ' AND '.join(
+        ["""(t.{name} COLLATE SQL_Latin1_General_CP1_CS_AS = {table}.{name}
+        COLLATE SQL_Latin1_General_CP1_CS_AS
+        OR CHECKSUM(t.{name}) = CHECKSUM({table}.{name}))""".format(
+         name=x, table=config['table']) for x in columns])
     # By default MS Sql Server is case insensitive
     # Need to make it insensitive as per Dedupe
     config['case_sensitive_columns'] = ' , '.join(["""{} COLLATE
@@ -259,7 +262,6 @@ def create_blocking(deduper, con, config):
     b_data = deduper.blocker(full_data)
 
     # Write out blocking map to CSV so we can quickly load in with
-    # Postgres COPY
     csv_file = tempfile.NamedTemporaryFile(prefix='blocks_', delete=False, mode='w')
     csv_writer = csv.writer(csv_file)
     csv_writer.writerows(b_data)
