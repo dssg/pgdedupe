@@ -8,7 +8,7 @@ flake8==3.3.0
 tox==2.7.0
 coverage==4.4.1
 Sphinx==1.6.2
-cryptography==1.8.1
+cryptography==1.9
 PyYAML==3.12
 pytest==3.0.7
 psycopg2==2.7.1
