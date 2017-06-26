@@ -1,5 +1,5 @@
 numpy==1.13.0
-pandas==0.20.1
+pandas==0.20.2
 pip==9.0.1
 bumpversion==0.5.3
 wheel==0.29.0
