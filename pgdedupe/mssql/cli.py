@@ -3,8 +3,8 @@
 """
 Based on: https://github.com/datamade/dedupe-examples/tree/master/pgsql_big_dedupe_example
 """
+import collections
 import csv
-import json
 import logging
 import os
 import random
@@ -12,58 +12,23 @@ import sys
 import tempfile
 import time
 
-import click
-
 import dedupe
 
 import numpy
 
-import psycopg2 as psy
-import psycopg2.extras
-
-import yaml
+import pymssql
 
 sys.path.append(os.path.abspath('pgdedupe'))
-sys.path.append(os.path.abspath('pgdedupe/mssql'))
-
 from pgdedupe import exact_matches
-from mssql import cli as mscli
 
 START_TIME = time.time()
+PYTHON_VERSION = sys.version_info[0]
 
 
-@click.command()
-@click.option('--config',
-              help='YAML- or JSON-formatted configuration file.',
-              required=True)
-@click.option('--db',
-              help='YAML- or JSON-formatted database connection credentials.',
-              required=True)
-def main(config, db, verbosity=2):
-    log_level = logging.WARNING
-    if verbosity == 1:
-        log_level = logging.INFO
-    elif verbosity is None or verbosity >= 2:
-        log_level = logging.DEBUG
-    logging.getLogger().setLevel(log_level)
-
-    dbconfig = load_config(db)
-    config = load_config(config)
-
-    dbconfig['type'] = dbconfig.get('type', 'postgres')
-
-    # Check type of database; Default to Postgres
-    if dbconfig['type'] == 'mssql':
-        del dbconfig['type']
-        mscli.mssql_main(config, dbconfig)
-    else:
-        del dbconfig['type']
-        postgres_main(config, dbconfig)
-
-
-def postgres_main(config, db):
-    con = psy.connect(cursor_factory=psycopg2.extras.RealDictCursor, **db)
+def mssql_main(config, db):
+    con = pymssql.connect(**db)
     config = process_options(config)
+    config['database'] = db['database']
 
     logging.info("Preprocessing...")
     preprocess(con, config)
@@ -89,17 +54,6 @@ def postgres_main(config, db):
     print('ran in', time.time() - START_TIME, 'seconds')
 
 
-def load_config(filename):
-    ext = os.path.splitext(filename)[1].lower()
-    with open(filename) as f:
-        if ext == '.json':
-            return json.load(f)
-        elif ext in ('.yaml', '.yml'):
-            return yaml.load(f)
-        else:
-            raise Exception('unknown filetype %s' % ext)
-
-
 def process_options(c):
     config = dict()
     # Required fields
@@ -112,8 +66,8 @@ def process_options(c):
                        ('threshold', 0.5),
                        ('recall', 0.90),
                        ('merge_exact', []),
-                       ('settings_file', 'dedup_postgres_settings'),
-                       ('training_file', 'dedup_postgres_training.json'),
+                       ('settings_file', 'dedup_mssql_settings'),
+                       ('training_file', 'dedup_mssql_training.json'),
                        ('filter_condition', '1=1'),
                        ('num_cores', None),
                        ('use_saved_model', False),
@@ -134,36 +88,93 @@ def process_options(c):
     config['all_fields'] = config['fields'] + [
         {'type': 'Interaction', 'interaction variables': x} for x in config['interactions']]
     columns = set([x['field'] for x in config['fields']])
+    # Used to nested sub-queries
+
+    config['stuff_condition'] = ' AND '.join(
+        ["""(({table}.{name} IS NULL AND t.{name} IS NULL) OR t.{name} = {table}.{name}
+        COLLATE SQL_Latin1_General_CP1_CS_AS)""".format(
+         name=x, table=config['table']) for x in columns])
+
+    config['column_select_table'] = ','.join(["{table}.{name}"
+                                             .format(name=x,
+                                                     table=config['table']) for x in columns])
+    config['column_select_t'] = ','.join(["t.{name}".format(name=x) for x in columns])
+
+    # By default MS Sql Server is case insensitive
+    # Need to make it insensitive as per Dedupe
+    config['case_sensitive_columns'] = ' , '.join(["""{name} COLLATE
+        SQL_Latin1_General_CP1_CS_AS AS {name}""".format(name=x) for x in columns])
     config['columns'] = ', '.join(columns)
     config['all_columns'] = ', '.join(columns | set(['_unique_id']))
     return config
+
+
+def unicode_to_str(data):
+    if data == "":
+        data = None
+    if PYTHON_VERSION < 3:
+        if isinstance(data, basestring):
+            return str(data)
+        elif isinstance(data, collections.Mapping):
+            return dict(map(unicode_to_str, data.iteritems()))
+        elif isinstance(data, collections.Iterable):
+            return type(data)(map(unicode_to_str, data))
+        else:
+            return data
+    else:
+        if isinstance(data, str):
+            return str(data)
+        elif isinstance(data, collections.Mapping):
+            return dict(map(unicode_to_str, data.items()))
+        elif isinstance(data, collections.Iterable):
+            return type(data)(map(unicode_to_str, data))
+        else:
+            return data
 
 
 def preprocess(con, config):
     c = con.cursor()
 
     # Ensure the database has the schema and required functions
-    c.execute("""CREATE SCHEMA IF NOT EXISTS {schema}""".format(**config))
-
+    c.execute("""IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = '{schema}')
+                BEGIN
+                EXEC('CREATE SCHEMA {schema}')
+                END""".format(**config))
+    """
     # Create an intarray-like idx function (https://wiki.postgresql.org/wiki/Array_Index):
-    c.execute("""CREATE OR REPLACE FUNCTION {schema}.idx(anyarray, anyelement)
-                   RETURNS INT AS
+    c.execute(""CREATE OR REPLACE FUNCTION {schema}.idx(anyarray, anyelement)
+                   RETURNS INT A
                  $$
                    SELECT i FROM (
                       SELECT generate_series(array_lower($1,1),array_upper($1,1))
                    ) g(i)
                    WHERE $1[i] = $2
                    LIMIT 1;
-                 $$ LANGUAGE SQL IMMUTABLE;""".format(**config))
-
+                 $$ LANGUAGE SQL IMMUTABLE;".format(**config))
+    """
     # Do an initial first pass and merge all exact duplicates
-    c.execute("""DROP TABLE IF EXISTS {schema}.entries_unique""".format(**config))
-    c.execute("""CREATE TABLE {schema}.entries_unique AS (
-                    SELECT {columns}, array_agg({key}) as src_ids FROM {table}
-                    WHERE ({filter_condition})
-                    GROUP BY {columns})""".format(**config))
+    c.execute("IF OBJECT_ID('{schema}.entries_unique', 'U') IS NOT NULL "
+              "DROP TABLE {schema}.entries_unique".format(**config))
+    c.execute("""SELECT DISTINCT {case_sensitive_columns} INTO {schema}.entries_unique
+                    FROM {table}
+                    WHERE ({filter_condition})""".format(**config))
+
     c.execute("ALTER TABLE {schema}.entries_unique "
-              " ADD COLUMN _unique_id SERIAL PRIMARY KEY".format(**config))
+              " ADD _unique_id INT IDENTITY(1,1) PRIMARY KEY".format(**config))
+
+    c.execute("IF OBJECT_ID('{schema}.entries_src_ids', 'U') IS NOT NULL "
+              "DROP TABLE {schema}.entries_src_ids".format(**config))
+
+    c.execute("CREATE INDEX table_column_idx "
+              " ON {table} ({key}, {columns})".format(**config))
+    c.execute("CREATE INDEX {schema}_entries_unique_column_idx "
+              " ON {schema}.entries_unique (_unique_id, {columns})".format(**config))
+    c.execute("""SELECT t._unique_id, {table}.{key} INTO {schema}.entries_src_ids
+                    FROM {schema}.entries_unique as t, {table}
+                    WHERE
+                    BINARY_CHECKSUM({column_select_table}) = BINARY_CHECKSUM({column_select_t})"""
+              .format(**config))
+
     con.commit()
 
 
@@ -182,13 +193,13 @@ def train(con, config):
     # Create a new deduper object and pass our data model to it.
     deduper = dedupe.Dedupe(config['all_fields'], num_cores=config['num_cores'])
 
-    # Named cursor runs server side with psycopg2
-    cur = con.cursor('individual_select')
+    cur = con.cursor(as_dict=True)
 
     cur.execute("""SELECT {all_columns}
                    FROM {schema}.entries_unique
                    ORDER BY _unique_id""".format(**config))
-    temp_d = dict((i, row) for i, row in enumerate(cur))
+    temp_d = dict((i, unicode_to_str(row)) for i, row in enumerate(cur))
+
     deduper.sample(temp_d, 75000)
 
     del temp_d
@@ -237,18 +248,20 @@ def create_blocking(deduper, con, config):
     # To run blocking on such a large set of data, we create a separate table
     # that contains blocking keys and record ids
     print('creating blocking_map database')
-    c.execute("DROP TABLE IF EXISTS {schema}.blocking_map".format(**config))
+    c.execute("IF OBJECT_ID('{schema}.blocking_map', 'U') IS NOT NULL "
+              "DROP TABLE {schema}.blocking_map".format(**config))
     c.execute("CREATE TABLE {schema}.blocking_map "
-              "(block_key VARCHAR(200), _unique_id INT)".format(**config))
+              "(block_key VARCHAR(200), _unique_id INT)".format(**config))  # TODO: THIS INT...
+    # ... needs to be dependent upon the column type of entry_id
 
     # If dedupe learned a Index Predicate, we have to take a pass
     # through the data and create indices.
     print('creating inverted index')
 
     for field in deduper.blocker.index_fields:
-        c2 = con.cursor('c2')
+        c2 = con.cursor(as_dict=True)
         c2.execute("SELECT DISTINCT {0} FROM {schema}.entries_unique".format(field, **config))
-        field_data = (row[field] for row in c2)
+        field_data = (unicode_to_str(row)[field] for row in c2)
         deduper.blocker.index(field_data, field)
         c2.close()
 
@@ -256,25 +269,30 @@ def create_blocking(deduper, con, config):
     # generator that yields unique `(block_key, donor_id)` tuples.
     print('writing blocking map')
 
-    c3 = con.cursor('donor_select2')
+    c3 = con.cursor(as_dict=True)
     c3.execute("SELECT {all_columns} FROM {schema}.entries_unique".format(**config))
-    full_data = ((row['_unique_id'], row) for row in c3)
+    full_data = ((row['_unique_id'], unicode_to_str(row)) for row in c3)
     b_data = deduper.blocker(full_data)
 
     # Write out blocking map to CSV so we can quickly load in with
-    # Postgres COPY
     csv_file = tempfile.NamedTemporaryFile(prefix='blocks_', delete=False, mode='w')
     csv_writer = csv.writer(csv_file)
     csv_writer.writerows(b_data)
     c3.close()
     csv_file.close()
 
-    f = open(csv_file.name, 'r')
-    c.copy_expert("COPY {schema}.blocking_map FROM STDIN CSV".format(**config), f)
-    f.close()
+    # write from csv to SQL
+    with open(csv_file.name, 'r') as f:
+        reader = csv.reader(f)
+        data = next(reader)
+        query = "INSERT INTO {schema}.blocking_map".format(**config)
+        query = query + " VALUES ({0})".format(','.join(['%s'] * len(data)))
+        cc = con.cursor()
+        cc.execute(query, tuple(data))
+        for data in reader:
+            cc.execute(query, tuple(data))
 
     os.remove(csv_file.name)
-
     con.commit()
 
     # Remove blocks that contain only one record, sort by block key and
@@ -288,10 +306,14 @@ def create_blocking(deduper, con, config):
     c.execute("CREATE INDEX blocking_map_key_idx "
               " ON {schema}.blocking_map (block_key)".format(**config))
 
-    c.execute("DROP TABLE IF EXISTS {schema}.plural_key".format(**config))
-    c.execute("DROP TABLE IF EXISTS {schema}.plural_block".format(**config))
-    c.execute("DROP TABLE IF EXISTS {schema}.covered_blocks".format(**config))
-    c.execute("DROP TABLE IF EXISTS {schema}.smaller_coverage".format(**config))
+    c.execute("IF OBJECT_ID('{schema""}.plural_key', 'U') IS NOT NULL "
+              "DROP TABLE {schema}.plural_key".format(**config))
+    c.execute("IF OBJECT_ID('{schema}.plural_block', 'U') IS NOT NULL "
+              "DROP TABLE {schema}.plural_block".format(**config))
+    c.execute("IF OBJECT_ID('{schema}.covered_blocks', 'U') IS NOT NULL "
+              "DROP TABLE {schema}.covered_blocks".format(**config))
+    c.execute("IF OBJECT_ID('{schema}.smaller_coverage', 'U') IS NOT NULL "
+              "DROP TABLE {schema}.smaller_coverage".format(**config))
 
     # Many block_keys will only form blocks that contain a single
     # record. Since there are no comparisons possible withing such a
@@ -299,7 +321,7 @@ def create_blocking(deduper, con, config):
     logging.info("calculating {schema}.plural_key".format(**config))
     c.execute("CREATE TABLE {schema}.plural_key "
               "(block_key VARCHAR(200), "
-              " block_id SERIAL PRIMARY KEY)".format(**config))
+              " block_id INT IDENTITY(1,1) PRIMARY KEY)".format(**config))
 
     c.execute("INSERT INTO {schema}.plural_key (block_key) "
               "SELECT block_key FROM {schema}.blocking_map "
@@ -310,10 +332,9 @@ def create_blocking(deduper, con, config):
               " ON {schema}.plural_key (block_key)".format(**config))
 
     logging.info("calculating {schema}.plural_block".format(**config))
-    c.execute("CREATE TABLE {schema}.plural_block "
-              "AS (SELECT block_id, _unique_id "
-              " FROM {schema}.blocking_map INNER JOIN {schema}.plural_key "
-              " USING (block_key))".format(**config))
+    c.execute("SELECT block_id, _unique_id INTO {schema}.plural_block"
+              " FROM {schema}.blocking_map AS bm INNER JOIN {schema}.plural_key AS pk"
+              " ON bm.block_key = pk.block_key".format(**config))
 
     logging.info("adding _unique_id index and sorting index")
     c.execute("CREATE INDEX plural_block_id_idx "
@@ -324,30 +345,20 @@ def create_blocking(deduper, con, config):
     # To use Kolb, et.al's Redundant Free Comparison scheme, we need to
     # keep track of all the block_ids that are associated with a
     # particular donor records.
-
-    logging.info("creating {schema}.covered_blocks".format(**config))
-    c.execute("CREATE TABLE {schema}.covered_blocks "
-              " AS (SELECT _unique_id, "
-              " array_agg(block_id ORDER BY block_id)  "
-              "   AS sorted_ids "
-              " FROM {schema}.plural_block "
-              " GROUP BY _unique_id)".format(**config))
-
-    c.execute("CREATE UNIQUE INDEX covered_blocks_id_idx "
-              "ON {schema}.covered_blocks (_unique_id)".format(**config))
-
-    con.commit()
-
     # In particular, for every block of records, we need to keep
     # track of a donor records's associated block_ids that are SMALLER than
     # the current block's _unique_id.
     logging.info("creating {schema}.smaller_coverage".format(**config))
-    c.execute("CREATE TABLE {schema}.smaller_coverage "
-              " AS (SELECT _unique_id, block_id, "
-              " sorted_ids[1:({schema}.idx(sorted_ids, block_id) - 1)] "
-              "      AS smaller_ids "
-              " FROM {schema}.plural_block INNER JOIN {schema}.covered_blocks "
-              " USING (_unique_id))".format(**config))
+    c.execute("SELECT pb._unique_id, pbs.block_id,"
+              " STUFF("
+              "(SELECT CONVERT(varchar(100), block_id) + ','"
+              " FROM {schema}.plural_block"
+              " WHERE block_id < pbs.block_id AND _unique_id = pbs._unique_id"
+              " FOR XML PATH('')),1,0,''"
+              ") AS smaller_ids"
+              " INTO {schema}.smaller_coverage"
+              " FROM {schema}.plural_block AS pb INNER JOIN {schema}.plural_block AS pbs"
+              " ON pb._unique_id = pbs._unique_id".format(**config))
 
     con.commit()
 
@@ -360,6 +371,7 @@ def candidates_gen(result_set):
     records = []
     i = 0
     for row in result_set:
+        row = unicode_to_str(row)
         if row['block_id'] != block_id:
             if records:
                 yield records
@@ -375,7 +387,7 @@ def candidates_gen(result_set):
         smaller_ids = row['smaller_ids']
 
         if smaller_ids:
-            smaller_ids = lset(smaller_ids)
+            smaller_ids = lset([int(x) for x in smaller_ids.split(',')[:-1]])
         else:
             smaller_ids = lset([])
 
@@ -386,25 +398,31 @@ def candidates_gen(result_set):
 
 
 def cluster(deduper, con, config):
-    c4 = con.cursor('c4')
-    c4.execute("SELECT {all_columns}, block_id, smaller_ids FROM {schema}.smaller_coverage "
-               "INNER JOIN {schema}.entries_unique "
-               "USING (_unique_id) "
-               "ORDER BY (block_id)".format(**config))
+    c4 = con.cursor(as_dict=True)
+    # Doing so to remove "Ambiguous column name '_unique_id' error
+    all_columns_unambiguous = config['all_columns'].replace('_unique_id',
+                                                            '{schema}.smaller_coverage._unique_id'
+                                                            .format(**config))
+    c4.execute("SELECT " + all_columns_unambiguous +
+               ", block_id, smaller_ids"
+               " FROM {schema}.smaller_coverage"
+               " INNER JOIN {schema}.entries_unique"
+               " ON {schema}.smaller_coverage._unique_id = {schema}.entries_unique._unique_id"
+               " ORDER BY block_id".format(**config))
 
     return deduper.matchBlocks(candidates_gen(c4), threshold=config['threshold'])
 
 
 # Writing out results
 def write_results(clustered_dupes, con, config):
-    c = con.cursor()
+    c = con.cursor(as_dict=True)
     # We now have a sequence of tuples of donor ids that dedupe believes
     # all refer to the same entity. We write this out onto an entity map
     # table
-    c.execute("DROP TABLE IF EXISTS {schema}.entity_map".format(**config))
-
+    c.execute("IF OBJECT_ID('{schema}.entity_map', 'U') IS NOT NULL "
+              "DROP TABLE {schema}.entity_map""".format(**config))
     c.execute("CREATE TABLE {schema}.entity_map "
-              "(_unique_id INT, canon_id INT, "
+              "(_unique_id INT, canon_id INT, "  # TODO: THESE INTS MUST BE DYNAMIC
               " cluster_score FLOAT, PRIMARY KEY(_unique_id))".format(**config))
 
     csv_file = tempfile.NamedTemporaryFile(prefix='entity_map_', delete=False,
@@ -418,9 +436,16 @@ def write_results(clustered_dupes, con, config):
 
     csv_file.close()
 
-    f = open(csv_file.name, 'r')
-    c.copy_expert("COPY {schema}.entity_map FROM STDIN CSV".format(**config), f)
-    f.close()
+    # write from csv to SQL
+    with open(csv_file.name, 'r') as f:
+        reader = csv.reader(f)
+        data = next(reader)
+        query = "INSERT INTO {schema}.entity_map".format(**config)
+        query = query + " VALUES ({0})".format(','.join(['%s'] * len(data)))
+        cc = con.cursor()
+        cc.execute(query, tuple(data))
+        for data in reader:
+            cc.execute(query, tuple(data))
 
     os.remove(csv_file.name)
 
@@ -440,16 +465,19 @@ def apply_results(con, config):
     # Dedupe only cares about matched records; it doesn't have a canonical id
     # for singleton records. So we create a mapping table between *all*
     # _unique_ids to their canonical_id (or back to themselves if singletons).
-    c.execute("DROP TABLE IF EXISTS {schema}.map".format(**config))
-    c.execute("CREATE TABLE {schema}.map "
-              "AS SELECT COALESCE(canon_id, _unique_id) AS canon_id,"
-              "_unique_id, "
+    c.execute("IF OBJECT_ID('{schema}.map', 'U') IS NOT NULL "
+              "DROP TABLE {schema}.map".format(**config))
+    c.execute("SELECT COALESCE(canon_id, ems._unique_id) AS canon_id,"
+              "ems._unique_id, "
               "COALESCE(cluster_score, 1.0) AS cluster_score "
-              "FROM {schema}.entity_map "
-              "RIGHT JOIN {schema}.entries_unique USING(_unique_id)".format(**config))
+              "INTO {schema}.map "
+              "FROM {schema}.entity_map AS em "
+              "RIGHT JOIN {schema}.entries_unique AS ems "
+              "ON em._unique_id = ems._unique_id".format(**config))
 
     # Remove the dedupe_id column from entries if it already exists
-    c.execute("ALTER TABLE {table} DROP COLUMN IF EXISTS dedupe_id".format(**config))
+    c.execute("IF (SELECT COL_LENGTH('{table}', 'dedupe_id')) IS NOT NULL "
+              "ALTER TABLE {table} DROP COLUMN dedupe_id".format(**config))
 
     # Merge clusters based upon exact matches of a subset of fields. This can
     # be done on the unique table or on the actual entries table, but it's more
@@ -458,41 +486,41 @@ def apply_results(con, config):
     for cols in config['merge_exact']:
         if not all(c in available_fields for c in cols):
             continue
-        exact_matches.merge('{}.map'.format(config['schema']), 'canon_id',
-                            '{}.entries_unique'.format(config['schema']), '_unique_id',
-                            cols, config['schema'], con)
+        exact_matches.merge_mssql('{}.map'.format(config['schema']), 'canon_id',
+                                  '{}.entries_unique'.format(config['schema']), '_unique_id',
+                                  cols, config['schema'], con)
 
     # Add that integer id back to the unique_entries table
-    c.execute("""ALTER TABLE {schema}.entries_unique
-                 DROP COLUMN IF EXISTS dedupe_id""".format(**config))
-    c.execute("ALTER TABLE {schema}.entries_unique ADD COLUMN dedupe_id INTEGER".format(**config))
-    c.execute("UPDATE {schema}.entries_unique u SET dedupe_id = m.canon_id "
-              "FROM {schema}.map m WHERE u._unique_id = m._unique_id".format(**config))
+    c.execute("IF (SELECT COL_LENGTH('{schema}.entries_unique', 'dedupe_id')) IS NOT NULL "
+              "ALTER TABLE {schema}.entries_unique DROP COLUMN dedupe_id".format(**config))
+    c.execute("ALTER TABLE {schema}.entries_unique ADD dedupe_id INT".format(**config))
+    c.execute("UPDATE {schema}.entries_unique SET dedupe_id = m.canon_id "
+              "FROM {schema}.map AS m "
+              "WHERE {schema}.entries_unique._unique_id = m._unique_id".format(**config))
     con.commit()
 
     # And now map it the whole way back to the entries table
     # create a mapping between the unique entries and the original entries
-    c.execute("DROP TABLE IF EXISTS {schema}.unique_map".format(**config))
-    c.execute("CREATE TABLE {schema}.unique_map AS ( "
-              "SELECT dedupe_id, unnest(src_ids) as {key} "
-              "FROM {schema}.entries_unique)".format(**config))
+    c.execute("IF OBJECT_ID('{schema}.unique_map', 'U') IS NOT NULL "
+              "DROP TABLE {schema}.unique_map".format(**config))
+    c.execute("SELECT eu.dedupe_id, {schema}.entries_src_ids.{key} as {key} "
+              "INTO {schema}.unique_map "
+              "FROM {schema}.entries_unique AS eu INNER JOIN {schema}.entries_src_ids "
+              "ON eu._unique_id = {schema}.entries_src_ids._unique_id".format(**config))
 
     # Grab the remainder of the exact merges:
     for cols in config['merge_exact']:
         if all(c in available_fields for c in cols):
             continue
-        exact_matches.merge('{}.unique_map'.format(config['schema']), 'dedupe_id',
-                            config['table'], config['key'],
-                            cols, config['schema'], con)
-    con.commit()
+        exact_matches.merge_mssql('{}.unique_map'.format(config['schema']), 'dedupe_id',
+                                  config['table'], config['key'],
+                                  cols, config['schema'], con)
 
-    c.execute("ALTER TABLE {table} ADD COLUMN dedupe_id INTEGER".format(**config))
-    c.execute("UPDATE {table} u SET dedupe_id = m.dedupe_id "
-              "FROM {schema}.unique_map m WHERE u.{key} = m.{key}".format(**config))
+    c.execute("ALTER TABLE {table} ADD dedupe_id INT".format(**config))
+    c.execute("UPDATE {table} SET dedupe_id = t.dedupe_id "
+              "FROM {schema}.entries_unique AS t WHERE "
+              "BINARY_CHECKSUM({column_select_table}) = BINARY_CHECKSUM({column_select_t})"
+              .format(**config))
 
     con.commit()
     c.close()
-
-
-if __name__ == '__main__':
-    main()

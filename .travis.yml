@@ -5,8 +5,14 @@ notifications:
   email: false
 services:
   - postgresql
+  - docker
 addons:
   postgresql: "9.4"
+
+before_install:
+  - docker pull microsoft/mssql-server-linux
+  - docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=1@34dedupe' -p 15433:1433 --name mssql -d microsoft/mssql-server-linux
+  - docker ps -a
 
 env:
 - TOXENV=py35
@@ -17,7 +23,9 @@ install: pip install -U tox
 
 script: tox -e ${TOXENV}
 
-after_success: pip install codecov && codecov
+after_success: 
+  - pip install codecov && codecov
+  - docker rm -f mssql
 
 deploy:
   true:
