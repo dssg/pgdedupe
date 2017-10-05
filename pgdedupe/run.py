@@ -5,6 +5,7 @@ import logging
 import random
 import numpy
 import dedupe
+import importlib
 
 from . import exact_matches
 
@@ -32,6 +33,8 @@ def process_options(user_config):
                        ('settings_file', 'dedup_postgres_settings'),
                        ('training_file', 'dedup_postgres_training.json'),
                        ('filter_condition', '1=1'),
+                       ('classifier', 'rlr.RegularizedLogisticRegression'),
+                       ('hyperparameters', {}),
                        ('num_cores', None),
                        ('use_saved_model', False),
                        ('prompt_for_labels', True),
@@ -126,6 +129,11 @@ def train(con, config):
             return dedupe.StaticDedupe(sf, num_cores=config['num_cores'])
     # Create a new deduper object and pass our data model to it.
     deduper = dedupe.Dedupe(config['all_fields'], num_cores=config['num_cores'])
+
+    module_name, class_name = config['classifier'].rsplit(".", 1)
+    module = importlib.import_module(module_name)
+    cls = getattr(module, class_name)
+    deduper.classifier = cls(**config['hyperparameters'])
 
     # Named cursor runs server side with psycopg2
     cur = con.cursor('individual_select')

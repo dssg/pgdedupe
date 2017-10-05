@@ -1,6 +1,7 @@
 import datetime
 import hashlib
 import json
+import logging
 import yaml
 import os
 
@@ -31,10 +32,13 @@ def create_model_definition(config, deduper):
     model_definition = {
         'seed': config['seed'],
         'pythonhashseed': os.environ.get('PYTHONHASHSEED'),
+        'classifier': config['classifier'],
+        'hyperparameters': config['hyperparameters'],
         'fields': config['fields'],
         'filter_condition': config['filter_condition'],
         'interactions': config['interactions'],
         'training_examples': deduper.training_pairs,
         'recall': config['recall'],
     }
+    logging.debug('Model definition = %s', model_definition)
     return model_definition
