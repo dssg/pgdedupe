@@ -5,7 +5,7 @@ import testing.postgresql
 import psycopg2
 import psycopg2.extras
 
-from unittest.mock import patch
+from mock import patch
 from pgdedupe.utils import load_config, filename_friendly_hash, create_model_definition
 from pgdedupe.run import process_options, preprocess, create_blocking, cluster, train
 
