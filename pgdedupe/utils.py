@@ -4,8 +4,6 @@ import json
 import yaml
 import io
 import os
-import logging
-import pickle
 
 
 def load_config(filename):
@@ -44,18 +42,3 @@ def create_model_definition(config, deduper):
     }
     training_examples.close()
     return model_definition
-
-
-def deduper_pickle_hash(deduper):
-    
-    #pickle.dump(self.data_model, file_obj)
-    #pickle.dump(self.classifier, file_obj)
-    #pickle.dump(self.predicates, file_obj)
-    #import pdb
-    #pdb.set_trace()
-    settings_bytes = io.BytesIO()
-    deduper.writeSettings(settings_bytes)
-    pickle_hash = hashlib.md5(settings_bytes.getvalue()).hexdigest()
-    settings_bytes.close()
-    logging.info('Pickle hash = %s', pickle_hash)
-    return pickle_hash

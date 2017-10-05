@@ -12,7 +12,13 @@ import psycopg2.extras
 import click
 
 from .utils import load_config, filename_friendly_hash, create_model_definition
-from .run import process_options, preprocess, train, create_blocking, cluster, write_results, apply_results
+from .run import process_options,\
+    preprocess,\
+    train,\
+    create_blocking,\
+    cluster,\
+    write_results,\
+    apply_results
 
 START_TIME = time.time()
 
@@ -113,6 +119,7 @@ def run(config, db, verbosity=2):
     con.close()
 
     print('ran in', time.time() - START_TIME, 'seconds')
+
 
 if __name__ == '__main__':
     run()
