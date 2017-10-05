@@ -2,7 +2,6 @@ import datetime
 import hashlib
 import json
 import yaml
-import io
 import os
 
 
@@ -29,16 +28,13 @@ def filename_friendly_hash(inputs):
 
 
 def create_model_definition(config, deduper):
-    training_examples = io.StringIO()
-    deduper.writeTraining(training_examples)
     model_definition = {
         'seed': config['seed'],
         'pythonhashseed': os.environ.get('PYTHONHASHSEED'),
         'fields': config['fields'],
         'filter_condition': config['filter_condition'],
         'interactions': config['interactions'],
-        'training_examples': training_examples.getvalue(),
+        'training_examples': deduper.training_pairs,
         'recall': config['recall'],
     }
-    training_examples.close()
     return model_definition
