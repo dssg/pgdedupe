@@ -1,6 +1,6 @@
 numpy==1.13.3
 pandas==0.22.0
-psycopg2==2.7.1
+psycopg2==2.7.3.2
 dedupe==1.6.13
 dedupe-variable-name==0.0.11
 fastcluster==1.1.23
