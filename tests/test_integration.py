@@ -20,7 +20,7 @@ def test_integration():
 
     initdb.init('db.yaml', 'pop.csv')
     
-    runner = CliRunner()
+    runner = CliRunner(env={'PYTHONHASHSEED': '123'})
     result = runner.invoke(cli.main, ['--config', 'config.yaml', '--db', 'db.yaml'])
     assert result.exit_code == 0
 

@@ -17,3 +17,4 @@ testing.postgresql==1.3.0
 Faker==0.7.12
 tqdm==4.11.2
 pytest-cov==2.5.1
+mock==2.0.0
